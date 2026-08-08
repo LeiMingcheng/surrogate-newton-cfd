@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the accompanying paper."
+title: "Surrogate-Newton CFD"
+version: 0.1.0
+license: BSD-3-Clause
+repository-code: "https://github.com/LeiMingcheng/surrogate-newton-cfd"
+url: "https://arxiv.org/abs/2608.04400"
+authors:
+  - family-names: Lei
+    given-names: Mingcheng
+  - family-names: Tang
+    given-names: Weishao
+  - family-names: Zhang
+    given-names: Yufei
+  - family-names: Chen
+    given-names: Haixin
+preferred-citation:
+  type: article
+  title: "Reliable and efficient steady CFD from surrogate predictions through Newton-Krylov correction"
+  authors:
+    - family-names: Lei
+      given-names: Mingcheng
+    - family-names: Tang
+      given-names: Weishao
+    - family-names: Zhang
+      given-names: Yufei
+    - family-names: Chen
+      given-names: Haixin
+  year: 2026
+  url: "https://arxiv.org/abs/2608.04400"
