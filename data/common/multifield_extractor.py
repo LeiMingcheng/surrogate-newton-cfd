@@ -686,4 +686,3 @@ def load_multifield_data(npz_path: str) -> Dict[str, np.ndarray]:
     """
     data = np.load(npz_path, allow_pickle=True)
     return {key: data[key] for key in data.files}
-

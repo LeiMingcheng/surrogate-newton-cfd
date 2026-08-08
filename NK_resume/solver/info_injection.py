@@ -395,4 +395,3 @@ def build_restart_aligned_local_info(
             info_arr[-1, 0, :, eddy_index] = 0.0
             info_arr[-1, -1, :, eddy_index] = 0.0
     return np.asarray(info_arr.reshape(-1), dtype=np.float64)
-

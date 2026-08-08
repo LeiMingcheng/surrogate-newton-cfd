@@ -7,4 +7,3 @@ from .direct import DirectPredictorAdapter
 from .fsb import FSBPredictorAdapter
 
 __all__ = ["DirectPredictorAdapter", "FSBPredictorAdapter", "PredictorAdapter"]
-

@@ -23,4 +23,3 @@ class ContractError(NKResumeError, ValueError):
 
 class LegacyBoundaryError(NKResumeError):
     """Raised when code attempts to cross into a legacy implementation path."""
-

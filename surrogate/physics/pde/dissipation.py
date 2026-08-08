@@ -1758,4 +1758,3 @@ def compute_jameson_dissipation(
         return D_rho, D_rhou, D_rhov, D_rhoE
     else:
         return D_rho, D_rhou, D_rhov
-
