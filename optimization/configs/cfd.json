@@ -1,0 +1,30 @@
+{
+  "mode": "cfd",
+  "output_dir": "../../tmp/optimization/cfd",
+  "baseline": "rae2822",
+  "task": {
+    "mach": [0.71, 0.72, 0.73],
+    "target_cl": 0.8,
+    "reynolds_mode": "coupled",
+    "aoa_bounds": [1.0, 5.0]
+  },
+  "cfd": {
+    "ranks_per_case": 8,
+    "pool_count": 3,
+    "mpi_launcher": "auto",
+    "python": "python",
+    "max_iterations": 6000,
+    "max_aoa_iterations": 15,
+    "cl_tolerance": 0.001,
+    "l2_convergence": 1e-6,
+    "options_version": 2,
+    "reference_state_mode": "dataset_unified"
+  },
+  "optimizer": {
+    "seed": 0,
+    "n_pop": 32,
+    "n_gen": 50,
+    "n_proc": 1,
+    "initial_population_size": 64
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "mode": "surrogate_nk",
+  "output_dir": "../../tmp/optimization/surrogate_nk",
+  "baseline": "rae2822",
+  "task": {
+    "mach": [0.71, 0.72, 0.73],
+    "target_cl": 0.8,
+    "reynolds_mode": "coupled",
+    "aoa_bounds": [1.0, 5.0]
+  },
+  "serving": {
+    "host": "127.0.0.1",
+    "port": 65432,
+    "timeout_s": 120.0,
+    "model_key": "fsb_dit"
+  },
+  "nk": {
+    "selection": "topk",
+    "top_k": 1,
+    "coupling": "sync",
+    "ranks_per_case": 8,
+    "pool_count": 3,
+    "mpi_launcher": "auto",
+    "adaptive_cycles": [6, 8, 10],
+    "residual_tolerance": 1e-8,
+    "cl_tolerance": 0.006,
+    "max_corrections": 3,
+    "options_version": 2
+  },
+  "optimizer": {
+    "seed": 0,
+    "n_pop": 32,
+    "n_gen": 50,
+    "n_proc": 32,
+    "initial_population_size": 64
+  }
+}

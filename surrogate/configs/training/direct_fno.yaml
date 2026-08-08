@@ -1,0 +1,148 @@
+experiment:
+  name: direct_fno_airfoil
+  seed: 42
+model:
+  family: direct
+  backbone: fno
+  params:
+    geometry_dim: 27
+    flow_condition_dim: 3
+    coord_channels: 4
+    out_channels: 5
+    backbone_variant: modern
+    use_initial_field: false
+    width: 128
+    modes1: 16
+    modes2: 24
+    n_layers: 6
+    padding: 9
+    condition_dim: 128
+    condition_fusion_method: attention
+    local_kernel_size: 3
+    use_conditioned_coord_bias: true
+    geometry_condition:
+      source: wall_coords
+      pool: mean
+      wall_row_index: 0
+      normalize_wall_coords: true
+      hidden_dim: 64
+    stability:
+      clamp_head:
+        enabled: true
+        clean_output: true
+        clamp_mode: tanh
+        learnable_scale: true
+        per_channel: true
+        min_scale: 0.001
+        gamma:
+          init_scale: 2.0
+        beta:
+          init_scale: 5.0
+        scale:
+          init_scale: 2.0
+        shift:
+          init_scale: 5.0
+        gate:
+          init_scale: 1.0
+data:
+  index_path: datasets/index.csv
+  stats_path: artifacts/turbulent-scale-stats.json
+  normalize: true
+  scale_turbulent: true
+  batch_size: 12
+  num_workers: 4
+  train_split: 0.9
+  val_split: 0.1
+  test_split: 0.0
+task:
+  kind: train
+training:
+  epochs: 1000
+  warmup_ratio: 0.0
+  eta_min_ratio: 0.01
+  optimizer:
+    name: adamw
+    lr: 1.0e-05
+    weight_decay: 0.0
+  loss:
+    use_volume_weighted_mse: true
+    volume_weight_alpha: 0.5
+    volume_weight_max: 10000.0
+    wall_mse_weight: 0.0
+    wall_mse_layers: 5
+    wall_cp_weight: 0.1
+    wall_cp_reduction: smooth_l1
+    gradient_loss_weight: 0.0
+    flow_perceptual_weight: 0.005
+    flow_perceptual_level_weights:
+    - 1.0
+    - 0.5
+    - 0.25
+    - 0.25
+    flow_perceptual_n_levels: 3
+    flow_perceptual_warmup_epochs: 0
+    flow_perceptual_warmup_center: 0
+    flow_perceptual_warmup_sharpness: 1
+    flow_perceptual_encoder_checkpoint: artifacts/flow-perceptual-encoder.pt
+    flow_perceptual_encoder_config:
+      channels:
+      - 64
+      - 128
+      - 256
+      - 512
+      input_channels: 15
+    flow_perceptual_manifold_prior:
+      enabled: false
+      lambda_prior: 0.1
+      lambda_stay: 0.05
+    res_loss_enabled: true
+    res_loss_weight: 5.0e-09
+    res_loss_reduction: l1
+    res_field_scale_mode: none
+    res_field_eps: 1.0e-12
+    res_field_norm: l2_sq
+    res_field_huber_delta: 1.0
+    res_loss_warmup_epochs: 0
+    res_loss_warmup_center: 0
+    res_loss_warmup_sharpness: 1
+    res_loss_weights:
+      continuity: 10.0
+      momentum_x: 1.0
+      momentum_y: 1.0
+      energy: 0.1
+      turbulence: 10000.0
+    residual_smoothing_enabled: true
+    residual_smoothing_lambda_eta: 4.0
+    residual_smoothing_lambda_xi: 1.0
+  checkpoint_path: null
+  load_training_state: false
+runtime:
+  checkpoint: artifacts/direct-fno-airfoil.pt
+  device: cuda
+evaluation:
+  output_dir: outputs/evaluation
+  rich:
+    compute_physical_field_metrics: true
+    compute_forces: true
+    compute_residuals: false
+    record_samples: true
+    field_metrics:
+      use_volume_weighted_mse: false
+      channel_names:
+      - density
+      - velocity_x
+      - velocity_y
+      - pressure
+      - sa_nu_tilde
+    physical_field_metrics:
+      use_volume_weighted_mse: false
+      channel_names:
+      - density
+      - velocity_x
+      - velocity_y
+      - pressure
+      - sa_nu_tilde
+    residual_metrics:
+      targets:
+      - pred
+      - target

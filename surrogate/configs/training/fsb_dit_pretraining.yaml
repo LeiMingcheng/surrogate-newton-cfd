@@ -1,0 +1,119 @@
+experiment:
+  name: fsb_dit_pretraining
+  seed: 42
+model:
+  family: fsb
+  backbone: dit
+  params:
+    field_channels: 5
+    coord_channels: 4
+    wall_layers: 84
+    spatial_shape:
+    - 88
+    - 304
+    geometry_dim: 27
+    flow_condition_dim: 3
+    hidden_dim: 640
+    num_layers: 12
+    num_heads: 8
+    patch_size: 8
+    condition_fusion_method: attention
+    use_gradient_checkpointing: true
+    geometry_condition:
+      source: wall_coords
+      pool: mean
+      wall_row_index: 0
+      normalize_wall_coords: true
+      hidden_dim: 64
+    stability_config:
+      adaln_clamp: true
+      clamp_head:
+        enabled: true
+        clean_output: true
+        clamp_mode: tanh
+        learnable_scale: true
+        per_channel: true
+        init_scale: 12.0
+        min_scale: 0.001
+data:
+  index_path: datasets/index.csv
+  stats_path: artifacts/turbulent-scale-stats.json
+  normalize: true
+  scale_turbulent: true
+  batch_size: 32
+  num_workers: 4
+  train_split: 0.9
+  val_split: 0.1
+  test_split: 0.0
+task:
+  kind: train
+training:
+  epochs: 1000
+  warmup_ratio: 0.1
+  eta_min_ratio: 0.001
+  optimizer:
+    name: adamw
+    lr: 1.0e-05
+    weight_decay: 0.0003
+  loss:
+    wall_layers: 84
+    use_volume_weighted_mse: true
+    volume_weight_alpha: 0.5
+    volume_weight_max: 10000.0
+    fsb_reconstruction_weight: 0.01
+    wall_mse_weight: 0.0
+    wall_mse_layers: 5
+    wall_cp_weight: 0.0
+    gradient_loss_weight: 0.0
+    flow_perceptual_weight: 0.0
+    res_loss_enabled: false
+    res_loss_weight: 1.0e-10
+  use_ema: true
+  ema_decay: 0.999
+  load_training_state: false
+fsb:
+  bridge:
+    type: i2sb
+    num_timesteps: 1000
+    beta_max: 0.3
+    beta_schedule: symmetric_sine
+    timestep_spacing: quadratic
+    prediction_type: x0
+  inference:
+    custom_timesteps:
+    - 999
+    - 749
+    - 499
+    - 249
+    - 0
+    eta: 0.0
+runtime:
+  checkpoint: artifacts/fsb-dit-pretraining.pt
+  device: cuda
+evaluation:
+  output_dir: outputs/evaluation
+  rich:
+    compute_physical_field_metrics: true
+    compute_forces: true
+    compute_residuals: false
+    record_samples: true
+    field_metrics:
+      use_volume_weighted_mse: false
+      channel_names:
+      - density
+      - velocity_x
+      - velocity_y
+      - pressure
+      - sa_nu_tilde
+    physical_field_metrics:
+      use_volume_weighted_mse: false
+      channel_names:
+      - density
+      - velocity_x
+      - velocity_y
+      - pressure
+      - sa_nu_tilde
+    residual_metrics:
+      targets:
+      - pred
+      - target

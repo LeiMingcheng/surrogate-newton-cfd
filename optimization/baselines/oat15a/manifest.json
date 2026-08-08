@@ -1,0 +1,8 @@
+{
+  "name": "oat15a",
+  "source": "ONERA OAT15A airfoil",
+  "n_cst": 10,
+  "nn": 1001,
+  "tail": 0.002,
+  "t0": 0.12188145308158971
+}

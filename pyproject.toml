@@ -1,0 +1,78 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "surrogate-newton-cfd"
+version = "0.1.0"
+description = "Two-dimensional steady CFD from surrogate predictions and Newton-Krylov correction"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "LICENSE"}
+authors = [
+  {name = "Mingcheng Lei"},
+  {name = "Weishao Tang"},
+  {name = "Yufei Zhang"},
+  {name = "Haixin Chen"},
+]
+dependencies = [
+  "einops",
+  "h5py",
+  "mpi4py",
+  "numpy",
+  "pandas",
+  "PyYAML",
+  "scipy",
+  "torch",
+  "tqdm",
+]
+
+[project.optional-dependencies]
+deployment = [
+  "cst-modeling3d",
+]
+optimization = [
+  "cst-modeling3d",
+  "pyDOE",
+]
+data = [
+  "pyvista",
+]
+dev = [
+  "ruff",
+]
+
+[project.scripts]
+surrogate-newton = "surrogate.scripts.main:main"
+surrogate-serving = "surrogate.serving.cli:main"
+nk-resume = "NK_resume.cli:main"
+surrogate-newton-opt = "optimization.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/LeiMingcheng/surrogate-newton-cfd"
+Paper = "https://arxiv.org/abs/2608.04400"
+Issues = "https://github.com/LeiMingcheng/surrogate-newton-cfd/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["surrogate*", "NK_resume*", "optimization*", "data*"]
+namespaces = true
+
+[tool.setuptools.package-data]
+surrogate = ["configs/training/*.yaml"]
+optimization = [
+  "baselines/*.md",
+  "baselines/*/*.json",
+  "baselines/*/*.md",
+  "baselines/*/*.txt",
+  "configs/*.json",
+  "templates/Runfiles/*",
+  "templates/*.txt",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
