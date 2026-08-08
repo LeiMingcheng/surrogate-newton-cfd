@@ -57,6 +57,21 @@ python deployment/smoke_check.py \
   --result-dir outputs/rae2822
 ```
 
+For release and container acceptance, follow the structural check with the
+sanitized aerolab3 numerical baseline:
+
+```bash
+python deployment/compare_acceptance.py \
+  --result-dir outputs/rae2822 \
+  --baseline deployment/acceptance/rae2822-baseline.json
+```
+
+The comparison fixes shapes and the physical case exactly, applies explicit
+absolute/relative tolerances to surrogate and corrected force coefficients,
+allows a bounded cross-machine change in the pre-NK residual, and still
+requires the configured final residual threshold. Recorded timing is
+informational because it is hardware-dependent.
+
 `config.yaml` controls the flow condition, inference schedule, and solver
 budget. Paths to released model artifacts remain explicit command-line inputs
 so the example never silently selects an unrelated checkpoint or statistics

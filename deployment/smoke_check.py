@@ -36,7 +36,10 @@ def _git_head(path: Path) -> str:
         capture_output=True,
         text=True,
     )
-    return result.stdout.strip() if result.returncode == 0 else ""
+    if result.returncode == 0:
+        return result.stdout.strip()
+    revision_file = path / ".surrogate-newton-revision"
+    return revision_file.read_text(encoding="utf-8").strip() if revision_file.is_file() else ""
 
 
 def _sha256(path: Path) -> str:

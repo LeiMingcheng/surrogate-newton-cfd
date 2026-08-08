@@ -1,0 +1,22 @@
+# Reproducible Surrogate-Newton pyHyp configuration (GNU Fortran + MPICH).
+PMAKE = make -j @JOBS@
+
+FF90 = @ENV_PREFIX@/bin/mpifort
+CC   = @ENV_PREFIX@/bin/mpicc
+
+CGNS_INCLUDE_FLAGS = -I@CGNS_PREFIX@/include
+CGNS_LINKER_FLAGS = -L@CGNS_PREFIX@/lib -Wl,-rpath,@CGNS_PREFIX@/lib -lcgns
+
+FF90_GEN_FLAGS = -fPIC -std=f2008
+CC_GEN_FLAGS = -fPIC
+FF90_OPT_FLAGS = -fdefault-real-8 -O2
+CC_OPT_FLAGS = -O2
+LINKER_FLAGS = -Wl,-rpath,@ENV_PREFIX@/lib
+
+include @ENV_PREFIX@/lib/petsc/conf/variables
+PETSC_INCLUDE_FLAGS = ${PETSC_CC_INCLUDES} -I@ENV_PREFIX@
+PETSC_LINKER_FLAGS = ${PETSC_LIB}
+
+PYTHON = @ENV_PREFIX@/bin/python
+PYTHON-CONFIG = @ENV_PREFIX@/bin/python3-config
+F2PY = @ENV_PREFIX@/bin/f2py

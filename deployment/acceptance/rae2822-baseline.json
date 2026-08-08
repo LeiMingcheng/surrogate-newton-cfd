@@ -1,0 +1,77 @@
+{
+  "schema_version": "rae2822_acceptance_v1",
+  "generated_utc": "2026-08-08",
+  "provenance": {
+    "surrogate_newton_cfd_commit": "430b09268549bd37da6b214869cc41c1ce640856",
+    "pyhyp_commit": "04af13e4e59d4a113d7def96b6b5b2dbf6fa9ed9",
+    "adflow_commit": "4ad0091910d1d885f1f5ddcf41b96b5950fa16c9",
+    "cgns_commit": "abc26040091ce13d4321bde816636c6fd5921e0f",
+    "model_release": "model-2608.04400",
+    "checkpoint_sha256": "0b8be8a31cc972fb817f46369c1d39efd39b703f307ba28eb85be388c7b2d942",
+    "statistics_sha256": "2c5589d891aac5d7b0ce621b4c4b044da81e630bae720515f0831555d440ef97"
+  },
+  "environment": {
+    "os": "Ubuntu 24.04.1 LTS x86_64",
+    "gpu": "NVIDIA GeForce RTX 4090",
+    "nvidia_driver": "550.54.14",
+    "python": "3.10.18",
+    "torch": "2.8.0+cu128",
+    "cuda_userspace": "12.8",
+    "numpy": "1.26.4",
+    "scipy": "1.15.3",
+    "mpi": "MPICH 4.3.1",
+    "mpi4py": "4.1.0",
+    "petsc": "3.19.6 real",
+    "cgns": "5.0 development ABI from locked commit"
+  },
+  "case": {
+    "geometry": "RAE2822",
+    "flow_conditions": {
+      "mach": 0.74,
+      "aoa_degrees": 1.0,
+      "reynolds": 16378003.279039722
+    },
+    "inference_steps": 5,
+    "mpi_ranks": 8,
+    "requested_newton_cycles": 10
+  },
+  "expected": {
+    "center_coordinate_shape": [4, 84, 304],
+    "vertex_coordinate_shape": [2, 85, 305],
+    "field_shape": [5, 84, 304],
+    "surrogate_force_coefficients": {
+      "cl": 0.5377886891365051,
+      "cd": 0.009068622253835201,
+      "cm": 0.23736874759197235
+    },
+    "corrected_force_coefficients": {
+      "cl": 0.538326317171401,
+      "cd": 0.009070946377332276,
+      "cm": 0.23745339249639422
+    },
+    "pre_nk_totalr": 22334.28364198059,
+    "post_nk_totalr": 0.12647640875770347,
+    "post_over_reference_totalr0": 3.726808091417403e-09,
+    "executed_newton_cycles": 9
+  },
+  "observed_timing_seconds": {
+    "newton_solver": 3.3572979755699635,
+    "newton_submit_to_finish": 4.021204948425293,
+    "newton_runtime_total": 5.338338550180197
+  },
+  "tolerances": {
+    "flow_condition_absolute": 1e-12,
+    "surrogate_force_absolute": 2e-05,
+    "surrogate_force_relative": 0.0002,
+    "corrected_force_absolute": 2e-05,
+    "corrected_force_relative": 0.002,
+    "pre_nk_totalr_relative": 0.1,
+    "maximum_post_over_reference_totalr0": 1e-08,
+    "maximum_newton_cycles": 10
+  },
+  "notes": [
+    "Paths and host-specific identifiers were removed from this baseline.",
+    "Timing is informational and is not an acceptance criterion.",
+    "Cross-machine acceptance is tolerance-based, not bitwise comparison."
+  ]
+}

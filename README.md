@@ -54,18 +54,29 @@ changes and environment-dependent build fixes.
 
 ## Quick start
 
-Create the Python environment and fetch the two exact sibling solver
-revisions:
+The maintained reproducibility route is the single-node NVIDIA runtime image.
+It rebuilds CGNS, pyHyp, and ADflow from the commits in
+`solver-stack.lock.yaml`, keeps the model outside the image, and runs as a
+non-root user. Remote build and full RAE2822 acceptance instructions are in
+[the container guide](deployment/container/README.md).
+
+For a native development environment, create the locked Python/MPI/PETSc
+environment and fetch the exact solver sources:
 
 ```bash
 conda env create -f environment.yml
 conda activate surrogate-newton-cfd
-scripts/install_solver_stack.sh ..
+scripts/fetch_solver_stack.sh ../solver-stack
+scripts/build_solver_stack.sh ../solver-stack
+scripts/verify_solver_stack.sh ../solver-stack
 ```
 
-Build pyHyp and ADflow against a common CGNS/PETSc/MPI toolchain by following
-[the solver-stack guide](docs/solver_stack.md), then install this repository
-with `python -m pip install -e '.[deployment]'`.
+The root environment and container both select Python 3.10.18, PyTorch
+2.8.0+cu128, and MPICH 4.3.1. The PyTorch wheel is referenced by its official
+CUDA 12.8 URL and SHA-256 so installation cannot silently select a CPU build.
+For an existing HPC toolchain, follow the upstream MDO Lab installation guides
+and apply only this project's locked revisions and verification checks; see
+[the solver-stack guide](docs/solver_stack.md).
 
 After the model release is published, download and verify the paired model
 artifacts:
@@ -73,6 +84,11 @@ artifacts:
 ```bash
 scripts/download_checkpoint.sh artifacts
 ```
+
+Until the model release URL and license are finalized, set
+`SURROGATE_NEWTON_ASSET_BASE_URL` to the approved release-pair location. The
+downloader resumes a partial transfer, verifies size and SHA-256, and only then
+renames it to the final filename.
 
 Run the lightweight structural check:
 
@@ -96,6 +112,14 @@ This launches the local surrogate service, builds the RAE2822 authority mesh,
 predicts a five-channel physical flow field, and runs terminal Newton
 correction through ADflow. Detailed prerequisites and outputs are documented in
 [deployment/README.md](deployment/README.md).
+
+Compare a completed run with the sanitized aerolab3 baseline using:
+
+```bash
+python deployment/compare_acceptance.py \
+  --result-dir outputs/rae2822 \
+  --baseline deployment/acceptance/rae2822-baseline.json
+```
 
 ## Model artifacts and data
 

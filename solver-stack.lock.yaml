@@ -28,6 +28,17 @@ adflow:
     - PETSc symbol visibility cleanup
     - explicit bundled METIS header paths
 
+cgns:
+  repository: https://github.com/CGNS/CGNS.git
+  commit: abc26040091ce13d4321bde816636c6fd5921e0f
+  describe: cpex40-381-gabc2604
+  build_options:
+    CGNS_ENABLE_64BIT: true
+    CGNS_ENABLE_HDF5: true
+    CGNS_ENABLE_FORTRAN: true
+    BUILD_SHARED_LIBS: true
+
 notes:
   - The ADflow debug tree is not part of the public solver stack.
   - Build fixes may need adjustment for another compiler, MPI, PETSc, or METIS installation.
+  - CGNS is built from the exact source commit used by the aerolab3 golden run.

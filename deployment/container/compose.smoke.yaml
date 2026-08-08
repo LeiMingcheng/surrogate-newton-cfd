@@ -1,0 +1,21 @@
+services:
+  rae2822-smoke:
+    build:
+      context: ../..
+      dockerfile: deployment/container/Dockerfile
+      args:
+        UBUNTU_IMAGE: ${UBUNTU_IMAGE:-ubuntu:24.04}
+        VCS_REF: ${VCS_REF:?Set VCS_REF to the full surrogate-newton-cfd commit}
+        IMAGE_VERSION: ${IMAGE_VERSION:-0.1.0-rc1}
+    image: ${RUNTIME_IMAGE:-surrogate-newton-cfd-runtime:0.1.0-rc1}
+    gpus: all
+    shm_size: 2gb
+    environment:
+      CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-0}
+    volumes:
+      - ${MODEL_DIR:?Set MODEL_DIR to the verified model release directory}:/models:ro
+      - rae2822-runtime:/runtime
+    command: ["rae2822-acceptance"]
+
+volumes:
+  rae2822-runtime:

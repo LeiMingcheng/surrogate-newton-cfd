@@ -55,24 +55,45 @@ share a compatible MPI implementation.
 
 Exact revisions are recorded in `solver-stack.lock.yaml`.
 
-## Fetch and build
+## Maintained container build
 
-The helper script checks out the immutable revisions into a chosen workspace:
+The release container is the maintained reproducibility path. Its scripts
+separate source retrieval, compilation, and binary verification:
 
 ```bash
-scripts/install_solver_stack.sh /path/to/workspace
+scripts/fetch_solver_stack.sh /path/to/solver-stack
+scripts/build_solver_stack.sh /path/to/solver-stack
+scripts/verify_solver_stack.sh /path/to/solver-stack
 ```
 
-Both projects contain compiled Fortran extensions. Configure each checkout's
-`config/config.mk` for the same compiler, MPI, CGNS, PETSc, and Python
-environment, then build and install it according to its upstream installation
-guide. A source checkout alone is not a valid runtime installation. Confirm the
-compiled imports and exact commits with:
+`fetch_solver_stack.sh` reads full commits from `solver-stack.lock.yaml` and
+checks them after checkout. `build_solver_stack.sh` renders the versioned GNU
+Fortran/MPICH config templates, builds the locked CGNS source, then compiles
+both extensions against one environment prefix. `verify_solver_stack.sh`
+checks commits, dynamic library resolution, the MPICH launcher, a two-rank
+mpi4py process, and the three modified solver hooks. Build logs remain beside
+the chosen solver-stack workspace.
+
+The compatibility script `install_solver_stack.sh` is fetch-only. New
+automation should call the three explicit phases above.
+
+## Native and HPC installations
+
+We do not maintain a second general-purpose HPC installation manual. Follow
+the upstream [ADflow installation guide](https://mdolab-adflow.readthedocs-hosted.com/en/latest/install.html)
+and [pyHyp installation guide](https://mdolab-pyhyp.readthedocs-hosted.com/en/latest/install.html),
+then use the exact source revisions, build-template deltas, and verification
+commands in this repository. In particular, the Python environment, mpi4py,
+PETSc, compiler wrappers, compiled extensions, and launcher must use the same
+MPI implementation.
+
+A source checkout alone is not a valid runtime installation. After a native
+build, also confirm the public runtime and model pair with:
 
 ```bash
 python deployment/smoke_check.py --level runtime \
-  --pyhyp-root /path/to/workspace/pyhyp \
-  --adflow-root /path/to/workspace/adflow \
+  --pyhyp-root /path/to/solver-stack/pyhyp \
+  --adflow-root /path/to/solver-stack/adflow \
   --checkpoint artifacts/fsb-dit-airfoil-2608.04400.pt \
   --stats artifacts/turbulent-scale-stats.json
 ```
