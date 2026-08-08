@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "release": "model-2608.04400",
+  "paper": "https://arxiv.org/abs/2608.04400",
+  "model": {
+    "filename": "fsb-dit-airfoil-2608.04400.pt",
+    "sha256": "0b8be8a31cc972fb817f46369c1d39efd39b703f307ba28eb85be388c7b2d942",
+    "size_bytes": 1448838994,
+    "family": "fsb",
+    "backbone": "dit",
+    "field_channels": 5,
+    "coordinate_channels": 4,
+    "geometry_dimensions": 27,
+    "flow_condition_dimensions": 3,
+    "spatial_shape": [88, 304],
+    "config": "surrogate/configs/training/fsb_dit.yaml",
+    "config_sha256": "f4cebc6a20760c47e748aa237bb745212c8e39a3b439b89e4c8b0069627606da",
+    "private_training_record_sha256": "e0b0b66c8aae7958e519e4cf3e34534be0fdaeb133d6105b6e00c31316077a62"
+  },
+  "normalization_statistics": {
+    "filename": "turbulent-scale-stats.json",
+    "sha256": "2c5589d891aac5d7b0ce621b4c4b044da81e630bae720515f0831555d440ef97",
+    "size_bytes": 671,
+    "version": "turbulent-scale-v1.0"
+  },
+  "notes": [
+    "The public model config changes only experiment labels and filesystem paths from the frozen training record.",
+    "Checkpoint and normalization statistics must be used as one release pair.",
+    "Training datasets and the flow-perceptual encoder checkpoint are not part of this release."
+  ]
+}

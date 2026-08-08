@@ -1,0 +1,29 @@
+model:
+  config: surrogate/configs/training/fsb_dit.yaml
+  device: cuda:0
+  host: 127.0.0.1
+  port: 65432
+  startup_timeout_sec: 180
+  request_timeout_sec: 300
+  inference_steps: 5
+
+geometry:
+  name: RAE2822
+  baseline_dir: deployment/assets/rae2822
+  trailing_edge_thickness: 0.002
+
+flow:
+  mach: 0.74
+  aoa_degrees: 1.0
+  reynolds_mode: coupled
+
+newton:
+  enabled: true
+  max_cycles: 10
+  residual_ratio: 1.0e-8
+  ranks_per_case: 8
+  pool_count: 1
+  mpi_launcher: auto
+  mpi_omp_threads: 1
+  ready_timeout_sec: 180
+  submit_timeout_sec: 7200
