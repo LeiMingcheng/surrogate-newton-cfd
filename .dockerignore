@@ -28,6 +28,16 @@ artifacts
 *.hdf5
 *.npz
 *.log
+*.bundle
+*.tar
+*.tar.gz
+*.tar.zst
+*.tgz
+*.image.tar
+*.image.tar.zst
+build-logs
+release-inputs
+solver-bundles-*
 
 server_info.md
 .env

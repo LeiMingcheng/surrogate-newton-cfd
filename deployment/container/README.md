@@ -30,9 +30,8 @@ only to permit this documented hybrid, not to choose the MPI or PETSc variant.
 
 ## Before the first remote build
 
-The `repository` URLs in `solver-stack.lock.yaml` must exist and expose the
-locked commits. At present that requires creating and pushing the two solver
-fork repositories. The model release URL is independent: place the paired
+The public pyHyp and ADflow forks expose the commits and release tags recorded
+in `solver-stack.lock.yaml`. The model release is independent: place the paired
 checkpoint and statistics in one host directory, with the filenames and
 digests from `model-manifest.json`.
 
@@ -59,6 +58,71 @@ pass the full reference with `--build-arg UBUNTU_IMAGE=ubuntu@sha256:...`.
 Record that reference, the final image digest, and `VCS_REF` in the acceptance
 report. Do not publish `latest` as the production reference.
 
+## Restricted-network server build
+
+When the server can reach package mirrors but GitHub source transfer is slow or
+unavailable, package the three locked solver repositories on aerolab3:
+
+```bash
+scripts/package_solver_bundles.sh \
+  --pyhyp /root/shared-nvme/public-repos/pyhyp \
+  --adflow /root/shared-nvme/public-repos/adflow \
+  --cgns /root/shared-nvme/build_libraries/CGNS \
+  --output /root/shared-nvme/release-inputs/solver-bundles-2608.04400
+
+cd /root/shared-nvme/release-inputs/solver-bundles-2608.04400
+sha256sum --check SHA256SUMS
+```
+
+Transfer the clean `surrogate-newton-cfd` checkout and the complete bundle
+directory through the local machine. For example, run equivalent `rsync -a`
+commands from the relay machine to place them under the server's data disk;
+keep the bundle directory outside the Git checkout.
+
+On the server, build from the exact checkout. The wrapper validates the Git
+revision, release checksums and bundles, selects the Public ECR Ubuntu 24.04
+digest below, uses the Tsinghua Ubuntu mirror, and invokes Buildx with host
+networking and plain logs:
+
+```bash
+cd /data/build/surrogate-newton-cfd
+VCS_REF=$(git rev-parse HEAD)
+scripts/build_restricted_server.sh \
+  --bundle-dir /data/build/solver-bundles-2608.04400 \
+  --vcs-ref "$VCS_REF" \
+  --image-version 0.1.0-rc1
+```
+
+The formal base is
+`public.ecr.aws/docker/library/ubuntu:24.04@sha256:561618e2c15bf2397621dd04f96926663a3b5616c189cf7e38db7e82f5c538ea`.
+The bundle is exposed as a read-only BuildKit named context, checked while the
+source stage has no network, and never copied into the runtime image.
+
+After the build, run the compiled and model-pair smoke check:
+
+```bash
+docker run --rm --gpus all \
+  --volume /absolute/path/to/model-release:/models:ro \
+  surrogate-newton-cfd-runtime:0.1.0-rc1 \
+  runtime-smoke
+```
+
+Then run Compose against that already-built image. `--no-build` is required so
+Compose cannot fall back to the default online Git source stage:
+
+```bash
+cd deployment/container
+MODEL_DIR=/absolute/path/to/model-release \
+VCS_REF=$(git -C ../.. rev-parse HEAD) \
+RUNTIME_IMAGE=surrogate-newton-cfd-runtime:0.1.0-rc1 \
+docker compose -f compose.smoke.yaml up --no-build --abort-on-container-exit
+```
+
+An HTTP(S) proxy may be configured outside the repository as an optional
+transfer accelerator. It is not a build dependency; never place proxy URLs
+containing credentials in this repository, Dockerfile, build arguments, or
+image layers.
+
 The default container command runs the source-level smoke check. The following
 also checks the compiled hooks and model pair:
 
@@ -71,7 +135,7 @@ docker run --rm --gpus all \
 
 ## Full RAE2822 acceptance
 
-From `deployment/container`, set a model directory and the exact source
+For the normal-network route, set a model directory and the exact source
 revision, then let Compose build and run the complete chain:
 
 ```bash

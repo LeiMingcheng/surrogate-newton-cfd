@@ -27,6 +27,16 @@ deployment/output/
 *.pth
 *.ckpt
 *.log
+*.bundle
+*.tar
+*.tar.gz
+*.tar.zst
+*.tgz
+*.image.tar
+*.image.tar.zst
+build-logs/
+release-inputs/
+solver-bundles-*/
 
 optimization/Calculation/
 optimization/total-db.dat
