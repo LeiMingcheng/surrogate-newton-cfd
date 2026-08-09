@@ -81,8 +81,8 @@ keep the bundle directory outside the Git checkout.
 
 On the server, build from the exact checkout. The wrapper validates the Git
 revision, release checksums and bundles, selects the Public ECR Ubuntu 24.04
-digest below, uses the Tsinghua Ubuntu mirror, and invokes Buildx with host
-networking and plain logs:
+digest below, uses the Tsinghua Ubuntu HTTP mirror for the first APT bootstrap,
+and invokes Buildx with host networking and plain logs:
 
 ```bash
 cd /data/build/surrogate-newton-cfd
@@ -95,6 +95,11 @@ scripts/build_restricted_server.sh \
 
 The formal base is
 `public.ecr.aws/docker/library/ubuntu:24.04@sha256:561618e2c15bf2397621dd04f96926663a3b5616c189cf7e38db7e82f5c538ea`.
+The wrapper defaults to `http://mirrors.tuna.tsinghua.edu.cn/ubuntu` because the
+fixed base does not yet have system CA certificates when its first
+`apt-get update` runs. Ubuntu archive signatures remain enabled; do not add
+`--allow-unauthenticated` or disable signature verification. Override the
+mirror with `--apt-mirror` when another bootstrap endpoint is required.
 The bundle is exposed as a read-only BuildKit named context, checked while the
 source stage has no network, and never copied into the runtime image.
 
