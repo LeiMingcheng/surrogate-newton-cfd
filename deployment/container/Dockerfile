@@ -1,8 +1,20 @@
 # syntax=docker/dockerfile:1.7
 
 ARG UBUNTU_IMAGE=ubuntu:24.04
+ARG SOLVER_SOURCE_MODE=git
 
-FROM ${UBUNTU_IMAGE} AS miniforge
+FROM ${UBUNTU_IMAGE} AS ubuntu-base
+
+ARG UBUNTU_APT_MIRROR=
+RUN if [ -n "${UBUNTU_APT_MIRROR}" ]; then \
+        mirror=${UBUNTU_APT_MIRROR%/}; \
+        sed -i \
+            -e "s|http://archive.ubuntu.com/ubuntu/|${mirror}/|g" \
+            -e "s|http://security.ubuntu.com/ubuntu/|${mirror}/|g" \
+            /etc/apt/sources.list.d/ubuntu.sources; \
+    fi
+
+FROM ubuntu-base AS miniforge
 
 ARG MINIFORGE_VERSION=26.3.2-2
 ARG MINIFORGE_SHA256=42260ffe3830fb953d5eee1bbb32229ff06aa7c3833c1ed7a9a0420a95685d94
@@ -27,7 +39,7 @@ RUN conda config --system --set channel_priority flexible \
     && conda env create --prefix ${CONDA_ENV} --file /tmp/environment.runtime.yml \
     && conda clean --all --yes
 
-FROM runtime-environment AS builder
+FROM runtime-environment AS builder-base
 
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends ca-certificates git \
@@ -47,8 +59,18 @@ ENV SURROGATE_NEWTON_CGNS_PREFIX=/opt/cgns
 ENV SURROGATE_NEWTON_SOLVER_LOCK=/opt/build-context/solver-stack.lock.yaml
 ENV LD_LIBRARY_PATH=/opt/cgns/lib:${CONDA_ENV}/lib
 
-RUN scripts/fetch_solver_stack.sh /opt/solver-stack \
-    && scripts/build_solver_stack.sh /opt/solver-stack \
+FROM builder-base AS solver-source-git
+RUN scripts/fetch_solver_stack.sh /opt/solver-stack --source-mode git
+
+FROM builder-base AS solver-source-bundle
+RUN --network=none \
+    --mount=type=bind,from=solver-bundles,source=.,target=/opt/solver-bundles,readonly \
+    scripts/fetch_solver_stack.sh /opt/solver-stack \
+        --source-mode bundle \
+        --bundle-dir /opt/solver-bundles
+
+FROM solver-source-${SOLVER_SOURCE_MODE} AS builder
+RUN scripts/build_solver_stack.sh /opt/solver-stack \
     && scripts/verify_solver_stack.sh /opt/solver-stack
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
@@ -70,7 +92,7 @@ RUN ${CONDA_ENV}/bin/python -m pip wheel \
     --wheel-dir /opt/wheels \
     /opt/surrogate-newton-source
 
-FROM ${UBUNTU_IMAGE} AS runtime
+FROM ubuntu-base AS runtime
 
 ARG VCS_REF=unknown
 ARG IMAGE_VERSION=0.1.0-rc1

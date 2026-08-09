@@ -6,6 +6,8 @@ pyhyp:
   repository: https://github.com/LeiMingcheng/pyhyp.git
   fork_ref: surrogate-newton-2608.04400
   fork_commit: 04af13e4e59d4a113d7def96b6b5b2dbf6fa9ed9
+  bundle_ref: refs/tags/surrogate-newton-2608.04400
+  bundle_file: pyhyp-04af13e4e59d.bundle
   functional_commit: c42482bc81fcebf3de27d5499f2d243a51841511
   required_change:
     - reusable fixed-topology surface reset via resetForNewSurface
@@ -17,6 +19,8 @@ adflow:
   repository: https://github.com/LeiMingcheng/adflow.git
   fork_ref: surrogate-newton-2608.04400
   fork_commit: 4ad0091910d1d885f1f5ddcf41b96b5950fa16c9
+  bundle_ref: refs/tags/surrogate-newton-2608.04400
+  bundle_file: adflow-4ad0091910d1.bundle
   numerical_runtime_commit: 93938aa28d2994b47762fafd78b2c0d340a7c694
   build_compatibility_commit: 9d36fa1481df977829b65a5687d5594598669e54
   numerical_runtime_changes:
@@ -31,6 +35,8 @@ adflow:
 cgns:
   repository: https://github.com/CGNS/CGNS.git
   commit: abc26040091ce13d4321bde816636c6fd5921e0f
+  bundle_ref: refs/heads/develop
+  bundle_file: cgns-abc26040091c.bundle
   describe: cpex40-381-gabc2604
   build_options:
     CGNS_ENABLE_64BIT: true
