@@ -48,6 +48,9 @@ workspace/
 └── adflow/                # 4ad00919, tagged surrogate-newton-2608.04400
 ```
 
+The same lock file also pins upstream CGNS and cgnsutilities; the fetch script
+places all four sources in its requested solver-stack directory.
+
 See `solver-stack.lock.yaml` and [solver stack installation](docs/solver_stack.md)
 for the exact source revisions and the distinction between numerical-runtime
 changes and environment-dependent build fixes.
@@ -138,5 +141,5 @@ machine-readable entry is provided in `CITATION.cff`.
 
 Original code in this repository is released under BSD-3-Clause. The modified
 pyHyp and ADflow repositories retain their upstream Apache-2.0 and LGPL-2.1
-licenses. See `THIRD_PARTY_NOTICES.md` for dependency boundaries and the
+licenses, and cgnsutilities retains Apache-2.0. See `THIRD_PARTY_NOTICES.md` for dependency boundaries and the
 unresolved license metadata of the optional legacy AeroOpt integration.

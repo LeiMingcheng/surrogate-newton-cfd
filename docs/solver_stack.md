@@ -1,8 +1,8 @@
 # Solver stack
 
-The reference runtime uses separate modified forks of pyHyp and ADflow. Keep
-them as sibling repositories so their upstream histories and licenses remain
-clear.
+The reference runtime uses separate modified forks of pyHyp and ADflow plus
+locked upstream CGNS and cgnsutilities sources. Keep the modified forks as
+sibling repositories so their upstream histories and licenses remain clear.
 
 ## pyHyp
 
@@ -69,8 +69,9 @@ scripts/verify_solver_stack.sh /path/to/solver-stack
 `fetch_solver_stack.sh` reads full commits from `solver-stack.lock.yaml` and
 checks them after checkout. `build_solver_stack.sh` renders the versioned GNU
 Fortran/MPICH config templates, builds the locked CGNS source, then compiles
-both extensions against one environment prefix. `verify_solver_stack.sh`
-checks commits, dynamic library resolution, the MPICH launcher, a two-rank
+the cgnsutilities, pyHyp, and ADflow extensions against one environment prefix.
+`verify_solver_stack.sh` checks all four commits, dynamic library resolution,
+cgnsutilities import provenance, the MPICH launcher, a two-rank
 mpi4py process, and the three modified solver hooks. Build logs remain beside
 the chosen solver-stack workspace.
 
@@ -94,6 +95,7 @@ build, also confirm the public runtime and model pair with:
 python deployment/smoke_check.py --level runtime \
   --pyhyp-root /path/to/solver-stack/pyhyp \
   --adflow-root /path/to/solver-stack/adflow \
+  --cgnsutilities-root /path/to/solver-stack/cgnsutilities \
   --checkpoint artifacts/fsb-dit-airfoil-2608.04400.pt \
   --stats artifacts/turbulent-scale-stats.json
 ```

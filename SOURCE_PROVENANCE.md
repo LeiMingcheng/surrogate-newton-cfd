@@ -39,6 +39,8 @@ calculation, and configurable optimizer tensor-list execution) are included.
   `04af13e4e59d4a113d7def96b6b5b2dbf6fa9ed9`
 - ADflow release revision:
   `4ad0091910d1d885f1f5ddcf41b96b5950fa16c9`
+- cgnsutilities upstream revision:
+  `c321af3951432193fa9ead289dd6f88ee20c44e9`
 
-Both solver repositories carry their own upstream history, change notes, and
-licenses. They are linked by `solver-stack.lock.yaml`, not copied here.
+The solver repositories carry their own upstream history and licenses. They
+are linked by `solver-stack.lock.yaml`, not copied here.

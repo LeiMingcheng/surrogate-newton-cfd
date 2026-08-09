@@ -30,13 +30,13 @@ dependencies = [
 [project.optional-dependencies]
 deployment = [
   "cst-modeling3d",
+  "tensorboard",
+  "pyvista",
+  "vtk",
 ]
 optimization = [
   "cst-modeling3d",
   "pyDOE",
-]
-data = [
-  "pyvista",
 ]
 dev = [
   "ruff",

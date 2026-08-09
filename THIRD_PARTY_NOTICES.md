@@ -11,14 +11,18 @@ BSD-3-Clause license. Its dependencies are not relicensed by that license.
 - **ADflow** is maintained in a separate sibling repository and remains under
   the GNU Lesser General Public License 2.1. Copyright and license text are
   preserved in that repository.
+- **cgnsutilities** is built from its separate upstream repository and remains
+  under the Apache License 2.0. Copyright and license text are preserved in
+  that repository.
 
-Neither solver is vendored into this repository. Exact revisions are recorded
+No solver source is vendored into this repository. Exact revisions are recorded
 in `solver-stack.lock.yaml`.
 
 ## Python dependencies
 
 Runtime packages including PyTorch, NumPy, SciPy, mpi4py, h5py, pandas,
-PyYAML, einops, tqdm, and cst-modeling3d retain their own upstream licenses.
+PyYAML, einops, tqdm, cst-modeling3d, TensorBoard, PyVista, and VTK retain their
+own upstream licenses.
 Installing this project does not change those terms.
 
 ## Optional legacy AeroOpt integration
