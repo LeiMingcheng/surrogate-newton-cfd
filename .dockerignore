@@ -29,6 +29,8 @@ artifacts
 *.npz
 *.log
 *.bundle
+*.whl
+Miniforge3-*-Linux-x86_64.sh
 *.tar
 *.tar.gz
 *.tar.zst
@@ -38,6 +40,8 @@ artifacts
 build-logs
 release-inputs
 solver-bundles-*
+miniforge-*
+python-wheels-*
 
 server_info.md
 .env

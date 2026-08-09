@@ -28,6 +28,8 @@ deployment/output/
 *.ckpt
 *.log
 *.bundle
+*.whl
+Miniforge3-*-Linux-x86_64.sh
 *.tar
 *.tar.gz
 *.tar.zst
@@ -37,6 +39,8 @@ deployment/output/
 build-logs/
 release-inputs/
 solver-bundles-*/
+miniforge-*/
+python-wheels-*/
 
 optimization/Calculation/
 optimization/total-db.dat

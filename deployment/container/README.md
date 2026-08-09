@@ -12,7 +12,7 @@ and it does not claim multi-node MPI support.
 - PyTorch 2.8.0+cu128 from the official CUDA 12.8 wheel, including its wheel
   SHA-256 in the environment file;
 - MPICH 4.3.1, mpi4py 4.1.0, PETSc 3.19.6, and HDF5 1.14.3 from conda-forge;
-- CGNS from the exact commit in `solver-stack.lock.yaml`; and
+- CGNS and cgnsutilities from their exact upstream commits; and
 - the exact pyHyp and ADflow fork commits in the same lock file.
 
 The build uses one environment prefix for MPICH, mpi4py, PETSc, the compiler
@@ -30,8 +30,9 @@ only to permit this documented hybrid, not to choose the MPI or PETSc variant.
 
 ## Before the first remote build
 
-The public pyHyp and ADflow forks expose the commits and release tags recorded
-in `solver-stack.lock.yaml`. The model release is independent: place the paired
+The public pyHyp and ADflow forks and the upstream CGNS/cgnsutilities
+repositories expose the commits recorded in `solver-stack.lock.yaml`. The
+model release is independent: place the paired
 checkpoint and statistics in one host directory, with the filenames and
 digests from `model-manifest.json`.
 
@@ -60,19 +61,33 @@ report. Do not publish `latest` as the production reference.
 
 ## Restricted-network server build
 
-When the server can reach package mirrors but GitHub source transfer is slow or
-unavailable, package the three locked solver repositories on aerolab3:
+When the server can reach package mirrors but GitHub source and large-file
+transfer is slow or unavailable, package the four locked solver repositories
+on aerolab3:
 
 ```bash
 scripts/package_solver_bundles.sh \
   --pyhyp /root/shared-nvme/public-repos/pyhyp \
   --adflow /root/shared-nvme/public-repos/adflow \
   --cgns /root/shared-nvme/build_libraries/CGNS \
-  --output /root/shared-nvme/release-inputs/solver-bundles-2608.04400
+  --cgnsutilities /root/shared-nvme/build_libraries/cgnsutilities \
+  --output /root/shared-nvme/release-inputs/solver-bundles-2608.04400-v2
 
-cd /root/shared-nvme/release-inputs/solver-bundles-2608.04400
+cd /root/shared-nvme/release-inputs/solver-bundles-2608.04400-v2
 sha256sum --check SHA256SUMS
 ```
+
+The formal large inputs are kept outside Git:
+
+```text
+/root/shared-nvme/release-inputs/miniforge-26.3.2-2/
+  Miniforge3-26.3.2-2-Linux-x86_64.sh
+/root/shared-nvme/release-inputs/python-wheels-cu128-2.8.0/
+  torch-2.8.0+cu128-cp310-cp310-manylinux_2_28_x86_64.whl
+```
+
+Their filenames, byte sizes, and SHA-256 values are pinned in
+`offline-inputs.lock`. Do not copy either file into the repository.
 
 Transfer the clean `surrogate-newton-cfd` checkout and the complete bundle
 directory through the local machine. For example, run equivalent `rsync -a`
@@ -88,9 +103,12 @@ and invokes Buildx with host networking and plain logs:
 cd /data/build/surrogate-newton-cfd
 VCS_REF=$(git rev-parse HEAD)
 scripts/build_restricted_server.sh \
-  --bundle-dir /data/build/solver-bundles-2608.04400 \
+  --bundle-dir /data/build/solver-bundles-2608.04400-v2 \
+  --miniforge-dir /data/build/miniforge-26.3.2-2 \
+  --python-wheel-dir /data/build/python-wheels-cu128-2.8.0 \
   --vcs-ref "$VCS_REF" \
-  --image-version 0.1.0-rc1
+  --image-version 0.1.0-rc1 \
+  --pip-index-url https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
 The formal base is
@@ -100,8 +118,11 @@ fixed base does not yet have system CA certificates when its first
 `apt-get update` runs. Ubuntu archive signatures remain enabled; do not add
 `--allow-unauthenticated` or disable signature verification. Override the
 mirror with `--apt-mirror` when another bootstrap endpoint is required.
-The bundle is exposed as a read-only BuildKit named context, checked while the
-source stage has no network, and never copied into the runtime image.
+The four Git bundles, Miniforge installer, and Torch wheel are exposed as
+separate read-only BuildKit named contexts. Solver restoration runs without a
+network. The installer and wheel are verified before use and none of these
+release inputs is copied into the runtime image. Remaining Conda and pip
+packages still come from configured public mirrors.
 
 After the build, run the compiled and model-pair smoke check:
 
@@ -123,7 +144,9 @@ RUNTIME_IMAGE=surrogate-newton-cfd-runtime:0.1.0-rc1 \
 docker compose -f compose.smoke.yaml up --no-build --abort-on-container-exit
 ```
 
-An HTTP(S) proxy may be configured outside the repository as an optional
+The pip mirror must be a credential-free public HTTP(S) URL; timeout and retry
+counts can be changed with `--pip-timeout` and `--pip-retries`. An HTTP(S)
+proxy may be configured outside the repository as an optional
 transfer accelerator. It is not a build dependency; never place proxy URLs
 containing credentials in this repository, Dockerfile, build arguments, or
 image layers.
@@ -137,6 +160,11 @@ docker run --rm --gpus all \
   surrogate-newton-cfd-runtime:0.1.0-rc1 \
   runtime-smoke
 ```
+
+The container runs as UID 10001. Its writable roots are `/runtime`,
+`/runtime/tmp`, and `/runtime/tmp/cfd`; the source tree remains read-only to the
+runtime user. When `/runtime` is a bind mount rather than the supplied named
+volume, give UID 10001 write permission on the host directory before launch.
 
 ## Full RAE2822 acceptance
 
