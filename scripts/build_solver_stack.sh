@@ -12,8 +12,10 @@ if [[ -z "$env_prefix" ]]; then
     printf 'ERROR: set SURROGATE_NEWTON_ENV_PREFIX or activate the target Conda environment.\n' >&2
     exit 1
 fi
-if [[ ! -x "$env_prefix/bin/python" || ! -x "$env_prefix/bin/mpifort" ]]; then
-    printf 'ERROR: %s does not contain the required Python and MPICH compiler wrappers.\n' \
+if [[ ! -x "$env_prefix/bin/python" || ! -x "$env_prefix/bin/mpifort" \
+    || ! -x "$env_prefix/bin/x86_64-conda-linux-gnu-cc" \
+    || ! -x "$env_prefix/bin/x86_64-conda-linux-gnu-gfortran" ]]; then
+    printf 'ERROR: %s does not contain the required Python, MPI, and GNU compilers.\n' \
         "$env_prefix" >&2
     exit 1
 fi
@@ -29,6 +31,7 @@ lock = yaml.safe_load(Path(sys.argv[1]).read_text(encoding="utf-8"))
 print(f"pyhyp\t{lock['pyhyp']['fork_commit']}")
 print(f"adflow\t{lock['adflow']['fork_commit']}")
 print(f"cgns\t{lock['cgns']['commit']}")
+print(f"cgnsutilities\t{lock['cgnsutilities']['commit']}")
 PY
 )
 mapfile -t locked_commits <<<"$locked_commit_output"
@@ -68,19 +71,24 @@ cmake \
     -DCMAKE_INSTALL_PREFIX="$cgns_prefix" \
     -DCMAKE_INSTALL_LIBDIR=lib \
     -DCMAKE_PREFIX_PATH="$env_prefix" \
-    -DCMAKE_C_COMPILER="$env_prefix/bin/mpicc" \
-    -DCMAKE_Fortran_COMPILER="$env_prefix/bin/mpifort" \
+    -DCMAKE_C_COMPILER="$env_prefix/bin/x86_64-conda-linux-gnu-cc" \
+    -DCMAKE_Fortran_COMPILER="$env_prefix/bin/x86_64-conda-linux-gnu-gfortran" \
     -DBUILD_SHARED_LIBS=ON \
     -DCGNS_ENABLE_64BIT=ON \
     -DCGNS_ENABLE_FORTRAN=ON \
     -DCGNS_ENABLE_HDF5=ON \
     -DHDF5_PREFER_PARALLEL=ON \
     2>&1 | tee "$stack_dir/logs/cgns-configure.log"
+grep -F 'Fortran name mangling convention: LOWERCASE_' \
+    "$stack_dir/logs/cgns-configure.log"
 cmake --build "$stack_dir/build/cgns" --parallel "$jobs" \
     2>&1 | tee "$stack_dir/logs/cgns-build.log"
 cmake --install "$stack_dir/build/cgns" \
     2>&1 | tee "$stack_dir/logs/cgns-install.log"
 
+render_config \
+    "$repo_root/deployment/container/config/cgnsutilities.config.mk.in" \
+    "$stack_dir/cgnsutilities/config/config.mk"
 render_config \
     "$repo_root/deployment/container/config/pyhyp.config.mk.in" \
     "$stack_dir/pyhyp/config/config.mk"
@@ -93,6 +101,11 @@ export PETSC_ARCH=
 export CGNS_HOME="$cgns_prefix"
 export PATH="$env_prefix/bin:$PATH"
 export LD_LIBRARY_PATH="$cgns_prefix/lib:$env_prefix/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+printf 'Building cgnsutilities at %s...\n' \
+    "$(git -C "$stack_dir/cgnsutilities" rev-parse HEAD)"
+make -C "$stack_dir/cgnsutilities" 2>&1 | tee "$stack_dir/logs/cgnsutilities-build.log"
+test -f "$stack_dir/cgnsutilities/cgnsutilities/libcgns_utils.so"
 
 printf 'Building pyHyp at %s...\n' "$(git -C "$stack_dir/pyhyp" rev-parse HEAD)"
 make -C "$stack_dir/pyhyp" 2>&1 | tee "$stack_dir/logs/pyhyp-build.log"

@@ -3,7 +3,6 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  - cmake=3.31.6
   - make=4.4.1
   - gcc_linux-64=15.1.0
   - gxx_linux-64=15.1.0

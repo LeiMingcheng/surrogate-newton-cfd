@@ -8,6 +8,7 @@ python_bin=${python_bin:-python3}
 pyhyp_dir=
 adflow_dir=
 cgns_dir=
+cgnsutilities_dir=
 output_dir=
 
 while (($#)); do
@@ -24,6 +25,10 @@ while (($#)); do
             cgns_dir=${2:?--cgns requires a path}
             shift 2
             ;;
+        --cgnsutilities)
+            cgnsutilities_dir=${2:?--cgnsutilities requires a path}
+            shift 2
+            ;;
         --output)
             output_dir=${2:?--output requires a path}
             shift 2
@@ -35,10 +40,11 @@ while (($#)); do
     esac
 done
 
-if [[ -z "$pyhyp_dir" || -z "$adflow_dir" || -z "$cgns_dir" || -z "$output_dir" ]]; then
+if [[ -z "$pyhyp_dir" || -z "$adflow_dir" || -z "$cgns_dir" \
+    || -z "$cgnsutilities_dir" || -z "$output_dir" ]]; then
     printf '%s\n' \
         'Usage: scripts/package_solver_bundles.sh --pyhyp PATH --adflow PATH' \
-        '       --cgns PATH --output PATH' >&2
+        '       --cgns PATH --cgnsutilities PATH --output PATH' >&2
     exit 1
 fi
 
@@ -59,7 +65,8 @@ if [[ -d "$output_dir" && -n $(find "$output_dir" -mindepth 1 -maxdepth 1 -print
 fi
 
 locked_source_output=$(
-    "$python_bin" - "$lock_file" "$pyhyp_dir" "$adflow_dir" "$cgns_dir" <<'PY'
+    "$python_bin" - \
+        "$lock_file" "$pyhyp_dir" "$adflow_dir" "$cgns_dir" "$cgnsutilities_dir" <<'PY'
 from pathlib import Path
 import re
 import sys
@@ -67,11 +74,17 @@ import sys
 import yaml
 
 lock = yaml.safe_load(Path(sys.argv[1]).read_text(encoding="utf-8"))
-paths = {"pyhyp": sys.argv[2], "adflow": sys.argv[3], "cgns": sys.argv[4]}
+paths = {
+    "pyhyp": sys.argv[2],
+    "adflow": sys.argv[3],
+    "cgns": sys.argv[4],
+    "cgnsutilities": sys.argv[5],
+}
 entries = (
     ("pyhyp", lock["pyhyp"], "fork_commit"),
     ("adflow", lock["adflow"], "fork_commit"),
     ("cgns", lock["cgns"], "commit"),
+    ("cgnsutilities", lock["cgnsutilities"], "commit"),
 )
 for name, item, commit_key in entries:
     commit = item[commit_key]

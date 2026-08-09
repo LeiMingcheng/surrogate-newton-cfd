@@ -1,0 +1,12 @@
+# Reproducible cgnsutilities configuration (GNU Fortran + CGNS).
+CGNS_INCLUDE_FLAGS = -I@CGNS_PREFIX@/include
+CGNS_LINKER_FLAGS = -L@CGNS_PREFIX@/lib -Wl,-rpath,@CGNS_PREFIX@/lib -lcgns
+
+CC = @ENV_PREFIX@/bin/x86_64-conda-linux-gnu-cc
+CFLAGS = -O2 -fPIC
+FC = @ENV_PREFIX@/bin/x86_64-conda-linux-gnu-gfortran
+FFLAGS = -O2 -fdefault-real-8 -g -fPIC -std=f2008
+
+PYTHON = @ENV_PREFIX@/bin/python
+PYTHON-CONFIG = @ENV_PREFIX@/bin/python3-config
+F2PY = @ENV_PREFIX@/bin/f2py

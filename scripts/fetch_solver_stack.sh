@@ -61,6 +61,7 @@ entries = (
     ("pyhyp", lock["pyhyp"], "fork_commit"),
     ("adflow", lock["adflow"], "fork_commit"),
     ("cgns", lock["cgns"], "commit"),
+    ("cgnsutilities", lock["cgnsutilities"], "commit"),
 )
 manifest = None
 if source_mode == "bundle":
@@ -71,7 +72,9 @@ if source_mode == "bundle":
     if manifest["solver_stack_lock_sha256"] != lock_sha256:
         raise SystemExit("bundle manifest does not match solver-stack.lock.yaml")
     if set(manifest["bundles"]) != {name for name, _, _ in entries}:
-        raise SystemExit("bundle manifest must contain exactly pyhyp, adflow, and cgns")
+        raise SystemExit(
+            "bundle manifest must contain exactly pyhyp, adflow, cgns, and cgnsutilities"
+        )
 
 for name, item, commit_key in entries:
     url = item["repository"]

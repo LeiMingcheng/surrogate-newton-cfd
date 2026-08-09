@@ -23,6 +23,7 @@ lock = yaml.safe_load(Path(sys.argv[1]).read_text(encoding="utf-8"))
 print(f"pyhyp\t{lock['pyhyp']['fork_commit']}")
 print(f"adflow\t{lock['adflow']['fork_commit']}")
 print(f"cgns\t{lock['cgns']['commit']}")
+print(f"cgnsutilities\t{lock['cgnsutilities']['commit']}")
 PY
 )
 mapfile -t locked_commits <<<"$locked_commit_output"
@@ -40,26 +41,30 @@ python_bin="$env_prefix/bin/python"
 mpiexec_bin="$env_prefix/bin/mpiexec"
 pyhyp_library="$stack_dir/pyhyp/pyhyp/hyp.so"
 adflow_library="$stack_dir/adflow/adflow/libadflow.so"
+cgnsutilities_library="$stack_dir/cgnsutilities/cgnsutilities/libcgns_utils.so"
 export PATH="$env_prefix/bin:$PATH"
 export LD_LIBRARY_PATH="$cgns_prefix/lib:$env_prefix/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export PYTHONNOUSERSITE=1
-export PYTHONPATH="$stack_dir/pyhyp:$stack_dir/adflow:$repo_root${PYTHONPATH:+:$PYTHONPATH}"
+export PYTHONPATH="$stack_dir/cgnsutilities:$stack_dir/pyhyp:$stack_dir/adflow:$repo_root${PYTHONPATH:+:$PYTHONPATH}"
 
-for library in "$pyhyp_library" "$adflow_library"; do
+for library in "$cgnsutilities_library" "$pyhyp_library" "$adflow_library"; do
     test -f "$library"
     dependencies=$(ldd "$library")
     if grep -q 'not found' <<<"$dependencies"; then
         printf 'ERROR: unresolved dynamic dependency in %s:\n%s\n' "$library" "$dependencies" >&2
         exit 1
     fi
-    mpi_line=$(grep -m1 'libmpi\.so' <<<"$dependencies" || true)
-    if [[ "$mpi_line" != *"$env_prefix/"* ]]; then
-        printf 'ERROR: %s does not resolve MPI from %s.\n' "$library" "$env_prefix" >&2
-        exit 1
-    fi
     cgns_line=$(grep -m1 'libcgns\.so' <<<"$dependencies" || true)
     if [[ "$cgns_line" != *"$cgns_prefix/"* ]]; then
         printf 'ERROR: %s does not resolve CGNS from %s.\n' "$library" "$cgns_prefix" >&2
+        exit 1
+    fi
+done
+
+for library in "$pyhyp_library" "$adflow_library"; do
+    mpi_line=$(ldd "$library" | grep -m1 'libmpi\.so' || true)
+    if [[ "$mpi_line" != *"$env_prefix/"* ]]; then
+        printf 'ERROR: %s does not resolve MPI from %s.\n' "$library" "$env_prefix" >&2
         exit 1
     fi
 done
@@ -75,15 +80,49 @@ if [[ $(readlink -f "$mpiexec_bin") != "$env_prefix/"* ]]; then
     exit 1
 fi
 
-"$python_bin" - <<'PY'
+if [[ $("$env_prefix/bin/cmake" --version | head -n 1) != "cmake version 3.31.6" ]]; then
+    printf 'ERROR: expected CMake 3.31.6 from the target Python environment.\n' >&2
+    exit 1
+fi
+
+"$python_bin" - "$stack_dir/cgnsutilities" <<'PY'
+from pathlib import Path
+import sys
+
 from adflow import libadflow
+import cgnsutilities
+from cgnsutilities import cgnsutilities as cgnsutilities_module
+from cgnsutilities import libcgns_utils as cgnsutilities_extension
 from pyhyp import pyHyp
 
+expected_root = Path(sys.argv[1]).resolve()
+assert Path(cgnsutilities.__file__).resolve().is_relative_to(expected_root)
+assert Path(cgnsutilities_module.__file__).resolve().is_relative_to(expected_root)
+assert Path(cgnsutilities_extension.__file__).resolve().is_relative_to(expected_root)
 assert hasattr(pyHyp, "resetForNewSurface")
 assert hasattr(libadflow.initializeflow, "reinitafterinjection")
 assert hasattr(libadflow.initializeflow, "rebuildrestartderivedstateaftersetinfo")
 print("compiled solver hooks: ok")
 PY
+
+"$python_bin" - <<'PY'
+import tensorboard
+import pyvista
+import vtk
+
+print(f"tensorboard {tensorboard.__version__}")
+print(f"pyvista {pyvista.__version__}")
+print(f"vtk {vtk.vtkVersion.GetVTKVersion()}")
+PY
+vtk_library=$("$python_bin" -c \
+    'import vtkmodules.vtkCommonCore as module; print(module.__file__)')
+vtk_dependencies=$(ldd "$vtk_library")
+if grep -q 'not found' <<<"$vtk_dependencies"; then
+    printf 'ERROR: unresolved dynamic dependency in %s:\n%s\n' \
+        "$vtk_library" "$vtk_dependencies" >&2
+    exit 1
+fi
+"$python_bin" -m pip check
 
 "$mpiexec_bin" -n 2 "$python_bin" -c \
     'from mpi4py import MPI; assert MPI.COMM_WORLD.Get_size() == 2'

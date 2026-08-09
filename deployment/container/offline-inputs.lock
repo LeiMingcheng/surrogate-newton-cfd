@@ -1,0 +1,3 @@
+# name<TAB>filename<TAB>size_bytes<TAB>sha256
+miniforge	Miniforge3-26.3.2-2-Linux-x86_64.sh	106038245	42260ffe3830fb953d5eee1bbb32229ff06aa7c3833c1ed7a9a0420a95685d94
+torch	torch-2.8.0+cu128-cp310-cp310-manylinux_2_28_x86_64.whl	889148606	0c96999d15cf1f13dd7c913e0b21a9a355538e6cfc10861a17158320292f5954

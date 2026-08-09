@@ -30,13 +30,16 @@ def _contains(path: Path, marker: str) -> bool:
 
 
 def _git_head(path: Path) -> str:
-    result = subprocess.run(
-        ["git", "-C", str(path), "rev-parse", "HEAD"],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode == 0:
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(path), "rev-parse", "HEAD"],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        result = None
+    if result is not None and result.returncode == 0:
         return result.stdout.strip()
     revision_file = path / ".surrogate-newton-revision"
     return revision_file.read_text(encoding="utf-8").strip() if revision_file.is_file() else ""
@@ -50,18 +53,28 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _compiled_solver_probe(pyhyp_root: Path, adflow_root: Path) -> dict[str, object]:
+def _compiled_solver_probe(
+    pyhyp_root: Path,
+    adflow_root: Path,
+    cgnsutilities_root: Path,
+) -> dict[str, object]:
     probe = """
 import json
 from pathlib import Path
 import adflow
 from adflow import libadflow
+import cgnsutilities
+from cgnsutilities import cgnsutilities as cgnsutilities_module
+from cgnsutilities import libcgns_utils as cgnsutilities_extension
 import pyhyp
 from pyhyp import pyHyp
 
 payload = {
     "pyhyp_import_root": str(Path(pyhyp.__file__).resolve()),
     "adflow_import_root": str(Path(adflow.__file__).resolve()),
+    "cgnsutilities_import_root": str(Path(cgnsutilities.__file__).resolve()),
+    "cgnsutilities_module_root": str(Path(cgnsutilities_module.__file__).resolve()),
+    "cgnsutilities_extension_root": str(Path(cgnsutilities_extension.__file__).resolve()),
     "pyhyp_reset": hasattr(pyHyp, "resetForNewSurface"),
     "adflow_injection_reinit": hasattr(libadflow.initializeflow, "reinitafterinjection"),
     "adflow_restart_rebuild": hasattr(
@@ -72,7 +85,12 @@ payload = {
 print(json.dumps(payload, sort_keys=True))
 """
     environment = os.environ.copy()
-    python_path = [str(pyhyp_root), str(adflow_root), str(REPO_ROOT)]
+    python_path = [
+        str(cgnsutilities_root),
+        str(pyhyp_root),
+        str(adflow_root),
+        str(REPO_ROOT),
+    ]
     if environment.get("PYTHONPATH"):
         python_path.append(environment["PYTHONPATH"])
     environment["PYTHONPATH"] = os.pathsep.join(python_path)
@@ -93,6 +111,15 @@ print(json.dumps(payload, sort_keys=True))
     payload["ok"] = bool(
         Path(str(payload["pyhyp_import_root"])).is_relative_to(pyhyp_root)
         and Path(str(payload["adflow_import_root"])).is_relative_to(adflow_root)
+        and Path(str(payload["cgnsutilities_import_root"])).is_relative_to(
+            cgnsutilities_root
+        )
+        and Path(str(payload["cgnsutilities_module_root"])).is_relative_to(
+            cgnsutilities_root
+        )
+        and Path(str(payload["cgnsutilities_extension_root"])).is_relative_to(
+            cgnsutilities_root
+        )
         and payload["pyhyp_reset"]
         and payload["adflow_injection_reinit"]
         and payload["adflow_restart_rebuild"]
@@ -172,6 +199,10 @@ def main() -> int:
     parser.add_argument("--level", choices=("source", "runtime", "result"), default="source")
     parser.add_argument("--pyhyp-root")
     parser.add_argument("--adflow-root", default=os.environ.get("SURROGATE_NEWTON_ADFLOW_ROOT"))
+    parser.add_argument(
+        "--cgnsutilities-root",
+        default=os.environ.get("SURROGATE_NEWTON_CGNSUTILITIES_ROOT"),
+    )
     parser.add_argument("--checkpoint")
     parser.add_argument("--stats")
     parser.add_argument("--result-dir")
@@ -183,6 +214,7 @@ def main() -> int:
 
     pyhyp_root = _solver_root(args.pyhyp_root, "pyhyp")
     adflow_root = _solver_root(args.adflow_root, "adflow")
+    cgnsutilities_root = _solver_root(args.cgnsutilities_root, "cgnsutilities")
     deployment = yaml.safe_load((REPO_ROOT / "deployment/config.yaml").read_text(encoding="utf-8"))
     solver_lock = yaml.safe_load((REPO_ROOT / "solver-stack.lock.yaml").read_text(encoding="utf-8"))
     model_manifest = json.loads((REPO_ROOT / "model-manifest.json").read_text(encoding="utf-8"))
@@ -199,6 +231,8 @@ def main() -> int:
         "baseline_thickness": (baseline / "t0.txt").is_file(),
         "pyhyp_exact_commit": _git_head(pyhyp_root) == solver_lock["pyhyp"]["fork_commit"],
         "adflow_exact_commit": _git_head(adflow_root) == solver_lock["adflow"]["fork_commit"],
+        "cgnsutilities_exact_commit": _git_head(cgnsutilities_root)
+        == solver_lock["cgnsutilities"]["commit"],
         "pyhyp_surface_reset": _contains(pyhyp_root / "pyhyp/pyHyp.py", "resetForNewSurface"),
         "adflow_injection_reinit": _contains(
             adflow_root / "src/f2py/adflow.pyf", "reinitafterinjection"
@@ -206,6 +240,9 @@ def main() -> int:
         "adflow_restart_rebuild": _contains(
             adflow_root / "src/f2py/adflow.pyf", "rebuildrestartderivedstateaftersetinfo"
         ),
+        "cgnsutilities_source": (
+            cgnsutilities_root / "cgnsutilities/cgnsutilities.py"
+        ).is_file(),
     }
     modules = {
         name: importlib.util.find_spec(name) is not None
@@ -216,7 +253,7 @@ def main() -> int:
     if args.level in {"runtime", "result"}:
         checkpoint = Path(args.checkpoint).expanduser().resolve()
         stats = Path(args.stats).expanduser().resolve()
-        runtime = _compiled_solver_probe(pyhyp_root, adflow_root)
+        runtime = _compiled_solver_probe(pyhyp_root, adflow_root, cgnsutilities_root)
         checks.update(
             {
                 "checkpoint_sha256": checkpoint.is_file()
@@ -226,6 +263,30 @@ def main() -> int:
                 "compiled_solver_imports": bool(runtime["ok"]),
             }
         )
+        runtime_paths = (
+            os.environ.get("SURROGATE_NEWTON_RUNTIME_ROOT"),
+            os.environ.get("CFD_RUNTIME_TMPDIR"),
+            os.environ.get("SURROGATE_NEWTON_RUNTIME_DIR"),
+        )
+        if all(runtime_paths):
+            runtime_root, cfd_tmpdir, runtime_dir = map(Path, runtime_paths)
+            probe_dirs = (
+                runtime_root / "smoke-mesh",
+                cfd_tmpdir,
+                runtime_dir / "smoke-output",
+            )
+            for probe_dir in probe_dirs:
+                probe_dir.mkdir(parents=True, exist_ok=True)
+                probe = probe_dir / ".write-probe"
+                probe.write_text("ok\n", encoding="utf-8")
+                probe.unlink()
+            checks.update(
+                {
+                    "runtime_root_writable": runtime_root.is_dir() and cfd_tmpdir.is_dir(),
+                    "runtime_output_writable": (runtime_dir / "smoke-output").is_dir(),
+                    "source_tree_read_only": not os.access(REPO_ROOT, os.W_OK),
+                }
+            )
     if args.level == "result":
         result_checks, result_details = _result_checks(
             Path(args.result_dir).expanduser().resolve(),
@@ -240,6 +301,7 @@ def main() -> int:
         "repo_root": str(REPO_ROOT),
         "pyhyp_root": str(pyhyp_root),
         "adflow_root": str(adflow_root),
+        "cgnsutilities_root": str(cgnsutilities_root),
         "checks": checks,
         "modules": modules,
         "runtime": runtime,

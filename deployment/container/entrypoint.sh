@@ -4,6 +4,7 @@ set -euo pipefail
 repo_root=/opt/surrogate-newton/src
 pyhyp_root=/opt/solver-stack/pyhyp
 adflow_root=/opt/solver-stack/adflow
+cgnsutilities_root=/opt/solver-stack/cgnsutilities
 model_dir=${SURROGATE_NEWTON_MODEL_DIR:-/models}
 runtime_dir=${SURROGATE_NEWTON_RUNTIME_DIR:-/runtime}
 checkpoint="$model_dir/fsb-dit-airfoil-2608.04400.pt"
@@ -15,13 +16,15 @@ case "${1:-}" in
         exec python "$repo_root/deployment/smoke_check.py" \
             --level source \
             --pyhyp-root "$pyhyp_root" \
-            --adflow-root "$adflow_root"
+            --adflow-root "$adflow_root" \
+            --cgnsutilities-root "$cgnsutilities_root"
         ;;
     runtime-smoke)
         exec python "$repo_root/deployment/smoke_check.py" \
             --level runtime \
             --pyhyp-root "$pyhyp_root" \
             --adflow-root "$adflow_root" \
+            --cgnsutilities-root "$cgnsutilities_root" \
             --checkpoint "$checkpoint" \
             --stats "$stats"
         ;;
@@ -34,6 +37,7 @@ case "${1:-}" in
             --level result \
             --pyhyp-root "$pyhyp_root" \
             --adflow-root "$adflow_root" \
+            --cgnsutilities-root "$cgnsutilities_root" \
             --checkpoint "$checkpoint" \
             --stats "$stats" \
             --result-dir "$result_dir"
@@ -45,7 +49,8 @@ case "${1:-}" in
         exec python "$repo_root/deployment/smoke_check.py" \
             --level source \
             --pyhyp-root "$pyhyp_root" \
-            --adflow-root "$adflow_root"
+            --adflow-root "$adflow_root" \
+            --cgnsutilities-root "$cgnsutilities_root"
         ;;
     *)
         exec "$@"

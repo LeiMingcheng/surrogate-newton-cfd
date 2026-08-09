@@ -44,6 +44,13 @@ cgns:
     CGNS_ENABLE_FORTRAN: true
     BUILD_SHARED_LIBS: true
 
+cgnsutilities:
+  repository: https://github.com/mdolab/cgnsutilities.git
+  commit: c321af3951432193fa9ead289dd6f88ee20c44e9
+  bundle_ref: refs/heads/main
+  bundle_file: cgnsutilities-c321af395143.bundle
+  describe: v2.8.1-1-gc321af3
+
 notes:
   - The ADflow debug tree is not part of the public solver stack.
   - Build fixes may need adjustment for another compiler, MPI, PETSc, or METIS installation.
