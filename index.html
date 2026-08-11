@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Surrogate–Newton CFD couples full-field neural prediction with residual-controlled Newton–Krylov correction for reliable steady aerodynamic CFD.">
+    <meta name="theme-color" content="#102a43">
+    <title>Surrogate–Newton CFD · Reliable steady CFD</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body class="paper-page">
+    <a class="skip-link" href="#main-content">Skip to content</a>
+
+    <header class="project-nav">
+      <div class="paper-shell project-nav-inner">
+        <a class="project-wordmark" href="./" aria-label="Surrogate–Newton CFD home">
+          <span aria-hidden="true">S∕N</span>
+          <strong>Surrogate–Newton CFD</strong>
+        </a>
+        <nav aria-label="Project navigation">
+          <a href="#method">Method</a>
+          <a href="#results">Results</a>
+          <a href="#citation">Citation</a>
+          <a class="nav-demo-link" href="#interactive-release">Demo status</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main-content">
+      <section class="paper-hero">
+        <div class="paper-shell hero-grid">
+          <div class="hero-copy">
+            <p class="project-label">Tsinghua University · Steady aerodynamic CFD</p>
+            <h1>Reliable and efficient steady CFD from surrogate predictions through Newton–Krylov correction</h1>
+            <p class="paper-subtitle">
+              A solver-coupled framework that turns rapid neural flow-field predictions into residual-controlled, solver-accepted states.
+            </p>
+            <p class="paper-authors">
+              <strong>Mingcheng Lei</strong><span>·</span><strong>Weishao Tang</strong><span>·</span><strong>Yufei Zhang</strong><sup>✦</sup><span>·</span><strong>Haixin Chen</strong>
+            </p>
+            <p class="paper-affiliation">
+              School of Aerospace Engineering and State Key Laboratory of Advanced Space Propulsion, Tsinghua University
+            </p>
+            <div class="paper-links" aria-label="Primary project links">
+              <a class="button-primary" href="https://github.com/LeiMingcheng/surrogate-newton-cfd" rel="noreferrer">Explore the code <span aria-hidden="true">→</span></a>
+              <a href="https://arxiv.org/abs/2608.04400" rel="noreferrer">Read paper</a>
+              <a href="#citation">Cite this work</a>
+            </div>
+          </div>
+
+          <aside class="hero-evidence" aria-label="Key paper results">
+            <p class="evidence-kicker">At a glance</p>
+            <div class="evidence-stat">
+              <strong>7+</strong>
+              <span>orders of magnitude lower median residual L<sub>2</sub> ratio on the OOD benchmark</span>
+            </div>
+            <div class="evidence-stat">
+              <strong>15.5×</strong>
+              <span>generation-level speedup over CFD in supercritical airfoil optimization</span>
+            </div>
+            <div class="evidence-stat compact">
+              <strong>2D → 3D</strong>
+              <span>evaluated from transonic airfoils to flying-wing configurations</span>
+            </div>
+            <p class="evidence-note">The server-side interactive preview currently focuses on the complete two-dimensional airfoil workflow.</p>
+          </aside>
+        </div>
+      </section>
+
+      <div class="paper-shell">
+        <figure class="featured-figure">
+          <img src="./assets/paper-workflow.jpg" alt="Three CFD routes compared: a standalone surrogate, conventional cold-start CFD, and the proposed surrogate–Newton workflow">
+          <figcaption>
+            <strong>Solver-coupled workflow.</strong> The surrogate supplies global flow structure; Newton–Krylov correction uses the target discrete residual to recover a solver-accepted state.
+          </figcaption>
+        </figure>
+
+        <section id="abstract" class="paper-section abstract-section">
+          <div class="section-heading-copy">
+            <p class="section-kicker">Why it matters</p>
+            <h2>Fast prediction, with reliability established by the solver</h2>
+          </div>
+          <div class="abstract-copy">
+            <p>
+              Neural surrogates predict complete flow fields quickly, but finite training data make their behaviour unreliable when aerodynamic design moves out of distribution. Surrogate–Newton uses the learned prediction as an initializer—not as an independently accepted CFD solution—and lets the target solver evaluate and correct it.
+            </p>
+            <p>
+              Across optimization-derived transonic airfoils, online supercritical-airfoil design, and three-dimensional flying-wing configurations, the experiments separate prediction accuracy from solver consistency and quantify the trade-off between learned initialization, correction budget, and conventional cold-start CFD.
+            </p>
+          </div>
+        </section>
+
+        <section id="method" class="paper-section">
+          <div class="section-heading-copy centered-heading">
+            <p class="section-kicker">Method</p>
+            <h2>A learned global estimate, followed by numerical correction</h2>
+            <p>The same target discretization, residual, and convergence threshold are used to evaluate and correct every predicted state.</p>
+          </div>
+          <div class="method-steps" aria-label="Surrogate–Newton method sequence">
+            <article><span>01</span><h3>Condition</h3><p>Airfoil geometry, Mach number, and angle of attack define the steady-flow query.</p></article>
+            <article><span>02</span><h3>Predict</h3><p>The surrogate rapidly estimates the complete flow and turbulence state.</p></article>
+            <article><span>03</span><h3>Inject</h3><p>The prediction initializes a geometry-matched state in the target CFD solver.</p></article>
+            <article><span>04</span><h3>Correct</h3><p>Newton–Krylov updates reduce the native residual to the solver acceptance threshold.</p></article>
+          </div>
+        </section>
+
+        <section id="results" class="paper-section results-section">
+          <div class="section-heading-copy centered-heading">
+            <p class="section-kicker">Evidence</p>
+            <h2>Designed for the geometric shift encountered in optimization</h2>
+            <p>The benchmark uses airfoils visited by real transonic optimization trajectories rather than small perturbations of a single canonical shape.</p>
+          </div>
+
+          <div class="result-story">
+            <figure class="paper-result-figure">
+              <img src="./assets/paper-ood-benchmark.jpg" alt="Airfoil populations, nearest-neighbour distance distributions, and PCA projection of the optimization-derived benchmark">
+              <figcaption><strong>Optimization-derived OOD benchmark.</strong> Training, validation, and optimization geometries separate in nearest-neighbour distance and principal-component space.</figcaption>
+            </figure>
+            <div class="result-copy">
+              <p class="result-number">01</p>
+              <h3>Measure geometric shift explicitly</h3>
+              <p>Mean five-nearest-neighbour distance in the 26-dimensional CST shape representation provides a transparent OOD indicator, exposed in the interactive demo as a distance and training percentile.</p>
+            </div>
+          </div>
+
+          <div class="result-story reverse-story">
+            <figure class="paper-result-figure">
+              <img src="./assets/paper-recovery.jpg" alt="Residual, field error, aerodynamic error, surface pressure, and pressure field comparisons before and after Newton–Krylov correction">
+              <figcaption><strong>Accuracy and solver consistency.</strong> Correction sharply reduces the residual and recovers pressure fields and aerodynamic loads under increasing geometric shift.</figcaption>
+            </figure>
+            <div class="result-copy">
+              <p class="result-number">02</p>
+              <h3>Recover solver-consistent states</h3>
+              <p>Newton–Krylov correction reduces residual, field, lift, and drag errors across the benchmark. The effect remains visible on geometries beyond the 99th percentile of training distance.</p>
+            </div>
+          </div>
+
+          <div class="result-story">
+            <figure class="paper-result-figure">
+              <img src="./assets/paper-optimization.png" alt="Optimization trajectories and surface pressure comparisons for RAE2822 and OAT15A airfoils">
+              <figcaption><strong>Online optimization.</strong> A fixed correction budget improves the reliability of surrogate-driven design trajectories for RAE2822 and OAT15A.</figcaption>
+            </figure>
+            <div class="result-copy">
+              <p class="result-number">03</p>
+              <h3>Translate offline correction into design speed</h3>
+              <p>In practical supercritical-airfoil optimization, the coupled workflow reaches a 15.5-fold generation-level speedup over CFD while improving the reliability of online candidate evaluation.</p>
+            </div>
+          </div>
+        </section>
+
+        <section id="interactive-release" class="paper-section demo-callout">
+          <div>
+            <p class="section-kicker">Interactive release</p>
+            <h2>Inspect the complete two-dimensional workflow</h2>
+            <p>Select or upload an airfoil, edit its geometry, evaluate its OOD distance, run the surrogate, and compare Newton–Krylov recovery with a cold-start ADflow reference on common plots.</p>
+            <ul class="demo-features" aria-label="Interactive demo features">
+              <li>RAE2822, OAT15A, and UIUC airfoils</li>
+              <li>CST geometry projection and pyHyp meshing</li>
+              <li>Shared Cp, force, residual, and field comparisons</li>
+            </ul>
+          </div>
+          <div class="demo-callout-action">
+            <span>Local preview</span>
+            <a href="#interactive-release" aria-disabled="true">Private server preview</a>
+            <small>The compute service is deployed on a loopback-only server endpoint. Public access will follow authentication and rate-limit work.</small>
+          </div>
+        </section>
+
+        <section id="citation" class="paper-section citation-section">
+          <div class="section-heading-copy">
+            <p class="section-kicker">Citation</p>
+            <h2>Reference the accompanying paper</h2>
+            <p>Code is released under BSD-3-Clause. Solver-stack licenses and dependency boundaries are documented in the repository.</p>
+          </div>
+          <pre><code>@article{lei2026surrogate_newton,
+  title   = {Reliable and efficient steady CFD from surrogate predictions
+             through Newton--Krylov correction},
+  author  = {Lei, Mingcheng and Tang, Weishao and Zhang, Yufei and Chen, Haixin},
+  year    = {2026},
+  journal = {arXiv preprint arXiv:2608.04400},
+  url     = {https://arxiv.org/abs/2608.04400}
+}</code></pre>
+        </section>
+
+        <footer class="paper-footer">
+          <div>
+            <strong>Surrogate–Newton CFD</strong>
+            <span>School of Aerospace Engineering, Tsinghua University</span>
+          </div>
+          <nav aria-label="Footer links">
+            <a href="https://arxiv.org/abs/2608.04400" rel="noreferrer">Paper</a>
+            <a href="https://github.com/LeiMingcheng/surrogate-newton-cfd" rel="noreferrer">GitHub</a>
+            <a href="#interactive-release">Demo status</a>
+          </nav>
+        </footer>
+      </div>
+    </main>
+  </body>
+</html>
