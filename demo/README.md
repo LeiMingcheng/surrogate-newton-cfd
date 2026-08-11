@@ -43,6 +43,20 @@ The optional geometry-distance badge needs the two offline analysis assets
 directory containing those files. Without them the badge is explicitly marked
 unavailable; the compute workflow is unchanged.
 
+Freeze the analysis outputs into a validated, checksummed external bundle with:
+
+```bash
+python -m demo.build_ood_assets \
+  --source-root /path/to/ood_geometry_pca \
+  --output-root /path/to/demo-assets-ood-v1 \
+  --source-revision <experiment-or-git-revision>
+export DEMO_OOD_ASSET_ROOT=/path/to/demo-assets-ood-v1
+```
+
+The builder preserves the source bytes, rejects malformed or incomplete
+training indices, and writes `manifest.json` plus `SHA256SUMS`. The large
+analysis outputs remain outside public Git.
+
 ## Start
 
 Activate an environment containing the project and solver stack, place the
@@ -99,6 +113,7 @@ environment variables:
 | `DEMO_PREWARM` | `1` | Prewarm model, pyHyp and resident pool |
 | `DEMO_COMPUTE_RESIDUALS` | `1` | Enable model residual diagnostics |
 | `DEMO_AIRFOIL_LIBRARY_ROOT` | package asset path | Optional UIUC library mount |
+| `DEMO_OOD_ASSET_ROOT` | unset | Optional validated OOD geometry-distance bundle |
 
 `SURROGATE_NEWTON_PYTHON` can explicitly select a Python executable. Solver
 modules and `mpiexec`/`mpirun` are resolved from the installed solver stack and

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import csv
 import hashlib
 import html
 import importlib.util
@@ -29,6 +28,7 @@ from data.common.flow_conditions import (
     coupled_reynolds_from_mach,
     sutherland_viscosity,
 )
+from demo.ood import OodGeometryIndex
 from NK_resume import (
     NKWorkPlan,
     ResidentWarmPoolController,
@@ -46,7 +46,6 @@ from surrogate.serving.geometry import (
 from surrogate.utils.cst import (
     coords_to_cst27,
     cst20_to_cst27,
-    cst26_to_shape_embedding,
     cst27_to_coords,
     scale_cst20_to_max_thickness,
 )
@@ -545,8 +544,7 @@ class DemoEngine:
                 authority_cgns_dir=self.mesh_root,
             )
         )
-        self._ood_embeddings: np.ndarray | None = None
-        self._ood_distribution: np.ndarray | None = None
+        self._ood_index: OodGeometryIndex | None = None
         self._ood_available: bool | None = None
         self._meshes: dict[str, dict[str, Any]] = {}
         self._uiuc_entries: list[dict[str, Any]] | None = None
@@ -788,64 +786,27 @@ class DemoEngine:
         return canonical
 
     def _ood_assets_available(self) -> bool:
-        if self.ood_asset_root is None:
-            return False
-        return all(
-            (self.ood_asset_root / name).is_file()
-            for name in ("cst26_coefficients.npz", "ood_scores.csv")
-        )
+        return self._load_ood()
 
     def _load_ood(self) -> bool:
         if self._ood_available is not None:
             return self._ood_available
-        self._ood_available = self._ood_assets_available()
-        if not self._ood_available:
+        if self.ood_asset_root is None:
+            self._ood_available = False
             return False
-        with np.load(
-            self.ood_asset_root / "cst26_coefficients.npz", allow_pickle=False
-        ) as data:
-            keys = np.asarray(data["geometry_key"]).astype(str)
-            cst26 = np.asarray(data["cst26"], dtype=np.float64)
-        key_to_index = {key: index for index, key in enumerate(keys)}
-        train_keys: list[str] = []
-        train_scores: list[float] = []
-        with (self.ood_asset_root / "ood_scores.csv").open(
-            "r", encoding="utf-8", newline=""
-        ) as handle:
-            for row in csv.DictReader(handle):
-                if row["split"] == "train" and row["geometry_key"] in key_to_index:
-                    train_keys.append(row["geometry_key"])
-                    train_scores.append(float(row["ood_k5"]))
-        indices = np.asarray([key_to_index[key] for key in train_keys], dtype=np.int64)
-        x_fixed = 0.5 * (1.0 - np.cos(np.linspace(0.0, np.pi, 201)))
-        self._ood_embeddings = cst26_to_shape_embedding(cst26[indices], x_fixed)
-        self._ood_distribution = np.sort(np.asarray(train_scores, dtype=np.float64))
+        try:
+            self._ood_index = OodGeometryIndex.from_asset_root(self.ood_asset_root)
+        except (FileNotFoundError, OSError, ValueError):
+            self._ood_available = False
+            return False
+        self._ood_available = True
         return True
 
     def ood_score(self, geometry27: np.ndarray) -> dict[str, Any] | None:
         if not self._load_ood():
             return None
-        geometry = np.asarray(geometry27, dtype=np.float64).reshape(27)
-        cst26 = geometry[:26]
-        x_fixed = 0.5 * (1.0 - np.cos(np.linspace(0.0, np.pi, 201)))
-        query = cst26_to_shape_embedding(cst26, x_fixed)
-        distances = np.sqrt(np.sum((self._ood_embeddings - query) ** 2, axis=1))
-        k5 = float(np.mean(np.partition(distances, 4)[:5]))
-        percentile = float(np.searchsorted(self._ood_distribution, k5, side="right")) / float(
-            len(self._ood_distribution)
-        )
-        if percentile >= 0.99:
-            label = "out-of-distribution"
-        elif percentile >= 0.90:
-            label = "distribution edge"
-        else:
-            label = "in-distribution"
-        return {
-            "label": label,
-            "percentile": percentile,
-            "distance_k5": k5,
-            "definition": "5-neighbour surface-RMS distance against offline training geometries",
-        }
+        assert self._ood_index is not None
+        return self._ood_index.score(geometry27)
 
     def predict(
         self,
