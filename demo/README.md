@@ -116,6 +116,9 @@ environment variables:
 | `DEMO_OOD_ASSET_ROOT` | unset | Optional validated OOD geometry-distance bundle |
 | `DEMO_MAX_PENDING_JOBS` | `64` | Global queued plus running job capacity |
 | `DEMO_MAX_PENDING_JOBS_PER_CLIENT` | `4` | Per-client queued plus running capacity |
+| `DEMO_HEAVY_JOB_CONCURRENCY` | `1` | Dedicated heavy-engine workers; only `1` or `2` |
+| `DEMO_NK_BURST_LIMIT` | `3` | Consecutive NK jobs before one waiting cold start is admitted |
+| `DEMO_COLD_START_MAX_WAIT_SEC` | `300` | Maximum cold-start wait before priority promotion |
 | `DEMO_JOB_RESULT_TTL_SEC` | `86400` | Result retention after terminal state |
 | `DEMO_JOB_CLEANUP_INTERVAL_SEC` | `60` | Expired-result cleanup interval |
 | `DEMO_JOB_MAX_RESULT_BYTES` | `67108864` | Maximum serialized result size per job |
@@ -165,8 +168,11 @@ Submit `mesh`, `predict`, `recover`, or `reference` with:
 ```
 
 Production requests require exactly 27 finite numeric values. All heavyweight actions are persisted in
-SQLite and executed by one worker, so simultaneous HTTP requests cannot launch
-two ADflow computations. States are `queued`, `running`, `succeeded`, `failed`,
+SQLite and executed by one or two dedicated engine workers. NK recovery has
+priority over cold-start CFD, but after three consecutive NK admissions one
+waiting cold start is admitted; a cold start is also promoted after five
+minutes. Jobs for the same case or geometry are never executed concurrently.
+States are `queued`, `running`, `succeeded`, `failed`,
 `cancelled`, and `expired`. Queued cancellation is immediate. A running solver
 call cannot be interrupted safely, so cancellation becomes effective after the
 current engine call returns. Jobs left in `running` by a restart are marked

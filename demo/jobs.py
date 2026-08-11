@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import math
 import re
 import shutil
@@ -148,11 +149,11 @@ def _public_error(exc: Exception) -> str:
 
 
 class JobScheduler:
-    """Persist jobs in SQLite and execute heavyweight engine calls one at a time."""
+    """Persist jobs in SQLite and execute them on dedicated engine workers."""
 
     def __init__(
         self,
-        engine: Any,
+        engine: Any | list[Any] | tuple[Any, ...],
         *,
         runtime_root: Path,
         max_pending_jobs: int = 64,
@@ -162,10 +163,15 @@ class JobScheduler:
         max_payload_bytes: int = 256_000,
         max_result_bytes: int = 64 * 1024 * 1024,
         action_timeouts: dict[str, float] | None = None,
+        nk_burst_limit: int = 3,
+        cold_start_max_wait_sec: float = 300.0,
         autostart: bool = True,
         clock: Callable[[], float] = time.time,
     ) -> None:
-        self.engine = engine
+        self.engines = list(engine) if isinstance(engine, (list, tuple)) else [engine]
+        if not self.engines or len(self.engines) > 2:
+            raise ValueError("Heavy-job concurrency must be either 1 or 2.")
+        self.engine = self.engines[0]
         self.root = Path(runtime_root).expanduser().resolve()
         if not self.root.is_absolute():
             raise ValueError("The scheduler runtime root must be absolute.")
@@ -177,6 +183,8 @@ class JobScheduler:
         self.cleanup_interval_sec = float(cleanup_interval_sec)
         self.max_payload_bytes = int(max_payload_bytes)
         self.max_result_bytes = int(max_result_bytes)
+        self.nk_burst_limit = int(nk_burst_limit)
+        self.cold_start_max_wait_sec = float(cold_start_max_wait_sec)
         self.action_timeouts = {
             "mesh": 600.0,
             "predict": 600.0,
@@ -190,6 +198,8 @@ class JobScheduler:
             raise ValueError("Scheduler TTL and cleanup interval must be positive.")
         if self.max_payload_bytes < 1024 or self.max_result_bytes < 1024:
             raise ValueError("Scheduler payload and result limits are too small.")
+        if self.nk_burst_limit < 1 or self.cold_start_max_wait_sec <= 0:
+            raise ValueError("Scheduler priority limits must be positive.")
         if set(self.action_timeouts) != set(JOB_ACTIONS) or any(
             float(value) <= 0 for value in self.action_timeouts.values()
         ):
@@ -197,7 +207,7 @@ class JobScheduler:
         self._clock = clock
         self._wake = threading.Event()
         self._stop = threading.Event()
-        self._thread: threading.Thread | None = None
+        self._threads: list[threading.Thread] = []
         self.root.mkdir(parents=True, exist_ok=True)
         self.job_root.mkdir(parents=True, exist_ok=True)
         self._initialize_database()
@@ -234,6 +244,12 @@ class JobScheduler:
                     result_path TEXT,
                     error TEXT
                 );
+                CREATE TABLE IF NOT EXISTS scheduler_state (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                );
+                INSERT OR IGNORE INTO scheduler_state(key, value)
+                    VALUES ('nk_streak', '0');
                 CREATE INDEX IF NOT EXISTS jobs_state_sequence
                     ON jobs(state, sequence);
                 CREATE INDEX IF NOT EXISTS jobs_client_state
@@ -250,6 +266,12 @@ class JobScheduler:
                 connection.execute(
                     "ALTER TABLE jobs ADD COLUMN timeout_sec REAL NOT NULL DEFAULT 7200"
                 )
+            if "resource_key" not in columns:
+                connection.execute("ALTER TABLE jobs ADD COLUMN resource_key TEXT")
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS jobs_running_resource "
+                "ON jobs(state, resource_key)"
+            )
 
     def _recover_interrupted_jobs(self) -> None:
         now = self._clock()
@@ -265,16 +287,21 @@ class JobScheduler:
             )
 
     def start(self) -> None:
-        if self._thread is not None and self._thread.is_alive():
+        if self._threads and any(thread.is_alive() for thread in self._threads):
             return
         if self._stop.is_set():
             raise RuntimeError("A closed scheduler cannot be restarted.")
-        self._thread = threading.Thread(
-            target=self._worker_loop,
-            name="demo-heavy-job-worker",
-            daemon=True,
-        )
-        self._thread.start()
+        self._threads = [
+            threading.Thread(
+                target=self._worker_loop,
+                args=(worker_id, engine),
+                name=f"demo-heavy-job-worker-{worker_id}",
+                daemon=True,
+            )
+            for worker_id, engine in enumerate(self.engines)
+        ]
+        for thread in self._threads:
+            thread.start()
         self._wake.set()
 
     def submit(
@@ -291,6 +318,13 @@ class JobScheduler:
             raise ValueError("Job payload exceeds the server limit.")
         safe_client_id = str(client_id).strip()[:128] or "unknown"
         job_id = f"job_{uuid.uuid4().hex}"
+        if action in {"recover", "reference"}:
+            resource_key = f"case:{normalized['case_id']}"
+        else:
+            geometry_bytes = json.dumps(
+                normalized["geometry27"], separators=(",", ":"), allow_nan=False
+            ).encode("utf-8")
+            resource_key = f"geometry:{hashlib.sha256(geometry_bytes).hexdigest()}"
         now = self._clock()
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -318,8 +352,8 @@ class JobScheduler:
                 """
                 INSERT INTO jobs(
                     job_id, action, state, client_id, payload_json, timeout_sec,
-                    created_at, updated_at
-                ) VALUES (?, ?, 'queued', ?, ?, ?, ?, ?)
+                    created_at, updated_at, resource_key
+                ) VALUES (?, ?, 'queued', ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     job_id,
@@ -329,6 +363,7 @@ class JobScheduler:
                     float(self.action_timeouts[action]),
                     now,
                     now,
+                    resource_key,
                 ),
             )
         self._wake.set()
@@ -424,28 +459,67 @@ class JobScheduler:
                     "SELECT state, COUNT(*) AS count FROM jobs GROUP BY state"
                 ).fetchall()
             }
-            running = connection.execute(
-                "SELECT job_id, action, started_at FROM jobs WHERE state = 'running' LIMIT 1"
-            ).fetchone()
+            running_rows = connection.execute(
+                "SELECT job_id, action, started_at FROM jobs "
+                "WHERE state = 'running' ORDER BY started_at"
+            ).fetchall()
+            running_jobs = [dict(row) for row in running_rows]
         return {
-            "concurrency_limit": 1,
+            "concurrency_limit": len(self.engines),
             "queue_depth": counts.get("queued", 0),
-            "running": None if running is None else dict(running),
+            "running": running_jobs[0] if running_jobs else None,
+            "running_jobs": running_jobs,
             "counts": counts,
             "max_pending_jobs": self.max_pending_jobs,
             "max_pending_jobs_per_client": self.max_pending_jobs_per_client,
             "result_ttl_sec": self.result_ttl_sec,
+            "priority_policy": {
+                "nk_burst_limit": self.nk_burst_limit,
+                "cold_start_max_wait_sec": self.cold_start_max_wait_sec,
+            },
         }
 
     def _claim_next(self) -> sqlite3.Row | None:
         now = self._clock()
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
-            row = connection.execute(
-                "SELECT * FROM jobs WHERE state = 'queued' ORDER BY sequence LIMIT 1"
-            ).fetchone()
-            if row is None:
+            eligible = connection.execute(
+                """
+                SELECT queued.* FROM jobs AS queued
+                 WHERE queued.state = 'queued'
+                   AND NOT EXISTS (
+                       SELECT 1 FROM jobs AS running
+                        WHERE running.state = 'running'
+                          AND running.resource_key IS NOT NULL
+                          AND running.resource_key = queued.resource_key
+                   )
+                 ORDER BY queued.sequence
+                """
+            ).fetchall()
+            if not eligible:
                 return None
+            nk_streak = int(
+                connection.execute(
+                    "SELECT value FROM scheduler_state WHERE key = 'nk_streak'"
+                ).fetchone()[0]
+            )
+            references = [row for row in eligible if row["action"] == "reference"]
+            oldest_reference_wait = (
+                0.0 if not references else now - float(references[0]["created_at"])
+            )
+            if references and (
+                nk_streak >= self.nk_burst_limit
+                or oldest_reference_wait >= self.cold_start_max_wait_sec
+            ):
+                row = references[0]
+            else:
+                priority = {"recover": 0, "mesh": 1, "predict": 2, "reference": 3}
+                row = min(
+                    eligible,
+                    key=lambda candidate: (
+                        priority[str(candidate["action"])], int(candidate["sequence"])
+                    ),
+                )
             updated = connection.execute(
                 """
                 UPDATE jobs
@@ -456,18 +530,26 @@ class JobScheduler:
             )
             if updated.rowcount != 1:
                 return None
+            if row["action"] == "recover":
+                nk_streak += 1
+            elif row["action"] == "reference":
+                nk_streak = 0
+            connection.execute(
+                "UPDATE scheduler_state SET value = ? WHERE key = 'nk_streak'",
+                (str(nk_streak),),
+            )
             return self._row(row["job_id"], connection)
 
-    def _dispatch(self, action: str, payload: dict[str, Any]) -> Any:
+    def _dispatch(self, engine: Any, action: str, payload: dict[str, Any]) -> Any:
         if action == "mesh":
-            return self.engine.prepare_mesh(**payload)
+            return engine.prepare_mesh(**payload)
         if action == "predict":
-            return self.engine.predict(**payload)
+            return engine.predict(**payload)
         case_id = str(payload.pop("case_id"))
         if action == "recover":
-            return self.engine.recover(case_id, **payload)
+            return engine.recover(case_id, **payload)
         if action == "reference":
-            return self.engine.reference(case_id, **payload)
+            return engine.reference(case_id, **payload)
         raise ValueError(f"Unsupported job action: {action}.")
 
     def _job_directory(self, job_id: str) -> Path:
@@ -540,18 +622,18 @@ class JobScheduler:
             )
         self._delete_job_directory(job_id)
 
-    def _run_job(self, row: sqlite3.Row) -> None:
+    def _run_job(self, engine: Any, row: sqlite3.Row) -> None:
         job_id = str(row["job_id"])
         try:
             payload = json.loads(row["payload_json"])
-            result = self._dispatch(str(row["action"]), payload)
+            result = self._dispatch(engine, str(row["action"]), payload)
             if self._clock() - float(row["started_at"]) > float(row["timeout_sec"]):
                 raise TimeoutError("The compute job exceeded its time limit.")
             self._finish_success(job_id, result)
         except Exception as exc:
             self._finish_failure(job_id, exc)
 
-    def _worker_loop(self) -> None:
+    def _worker_loop(self, _worker_id: int, engine: Any) -> None:
         while not self._stop.is_set():
             self.cleanup_expired()
             row = self._claim_next()
@@ -559,7 +641,7 @@ class JobScheduler:
                 self._wake.wait(self.cleanup_interval_sec)
                 self._wake.clear()
                 continue
-            self._run_job(row)
+            self._run_job(engine, row)
 
     def _delete_job_directory(self, job_id: str) -> None:
         directory = self._job_directory(job_id)
@@ -594,8 +676,10 @@ class JobScheduler:
     def close(self, *, timeout: float | None = 10.0) -> bool:
         self._stop.set()
         self._wake.set()
-        thread = self._thread
-        if thread is None:
+        if not self._threads:
             return True
-        thread.join(timeout=timeout)
-        return not thread.is_alive()
+        deadline = None if timeout is None else time.monotonic() + timeout
+        for thread in self._threads:
+            remaining = None if deadline is None else max(0.0, deadline - time.monotonic())
+            thread.join(timeout=remaining)
+        return not any(thread.is_alive() for thread in self._threads)

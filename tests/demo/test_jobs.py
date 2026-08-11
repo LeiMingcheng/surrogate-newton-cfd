@@ -113,6 +113,77 @@ class JobSchedulerTests(unittest.TestCase):
         self.assertEqual(len(engine.calls), 16)
         self.assertEqual(scheduler.stats()["concurrency_limit"], 1)
 
+    def test_two_workers_run_distinct_resources_concurrently(self) -> None:
+        engine = FakeEngine(delay=0.08)
+        scheduler = self.scheduler(
+            [engine, engine],
+            max_pending_jobs=8,
+            max_pending_jobs_per_client=2,
+            cleanup_interval_sec=1,
+        )
+        jobs = [
+            scheduler.submit(
+                "mesh",
+                {"geometry27": [float(index)] + [0.0] * 26, "name": f"case-{index}"},
+                client_id=f"client-{index}",
+            )
+            for index in range(2)
+        ]
+        summaries = [self.wait_for_state(scheduler, job["job_id"]) for job in jobs]
+        self.assertTrue(all(item["state"] == "succeeded" for item in summaries))
+        self.assertEqual(engine.max_active, 2)
+        self.assertEqual(scheduler.stats()["concurrency_limit"], 2)
+
+    def test_same_case_never_runs_nk_and_cold_start_concurrently(self) -> None:
+        engine = FakeEngine(delay=0.04)
+        scheduler = self.scheduler([engine, engine], cleanup_interval_sec=1)
+        jobs = [
+            scheduler.submit(
+                "recover",
+                {"case_id": "case_shared", "cycles": 2},
+                client_id="nk-client",
+            ),
+            scheduler.submit(
+                "reference",
+                {"case_id": "case_shared", "max_cycles": 25},
+                client_id="cold-client",
+            ),
+        ]
+        summaries = [self.wait_for_state(scheduler, job["job_id"]) for job in jobs]
+        self.assertTrue(all(item["state"] == "succeeded" for item in summaries))
+        self.assertEqual(engine.max_active, 1)
+
+    def test_nk_priority_uses_three_to_one_anti_starvation_policy(self) -> None:
+        engine = FakeEngine(delay=0.005)
+        scheduler = self.scheduler(
+            engine,
+            autostart=False,
+            nk_burst_limit=3,
+            cleanup_interval_sec=1,
+        )
+        jobs = [
+            scheduler.submit(
+                "reference",
+                {"case_id": "case_cold", "max_cycles": 25},
+                client_id="cold-client",
+            )
+        ]
+        jobs.extend(
+            scheduler.submit(
+                "recover",
+                {"case_id": f"case_nk_{index}", "cycles": 2},
+                client_id=f"nk-client-{index}",
+            )
+            for index in range(4)
+        )
+        scheduler.start()
+        for job in jobs:
+            self.assertEqual(self.wait_for_state(scheduler, job["job_id"])["state"], "succeeded")
+        self.assertEqual(
+            engine.calls,
+            ["recover", "recover", "recover", "reference", "recover"],
+        )
+
     def test_queue_capacity_is_atomic_under_a_running_job(self) -> None:
         gate = threading.Event()
         engine = FakeEngine(gate=gate)

@@ -311,6 +311,22 @@ def build_parser() -> argparse.ArgumentParser:
         default=int(os.environ.get("DEMO_MAX_PENDING_JOBS", "64")),
     )
     parser.add_argument(
+        "--heavy-job-concurrency",
+        type=int,
+        choices=(1, 2),
+        default=int(os.environ.get("DEMO_HEAVY_JOB_CONCURRENCY", "1")),
+    )
+    parser.add_argument(
+        "--nk-burst-limit",
+        type=int,
+        default=int(os.environ.get("DEMO_NK_BURST_LIMIT", "3")),
+    )
+    parser.add_argument(
+        "--cold-start-max-wait-sec",
+        type=float,
+        default=float(os.environ.get("DEMO_COLD_START_MAX_WAIT_SEC", "300")),
+    )
+    parser.add_argument(
         "--max-pending-jobs-per-client",
         type=int,
         default=int(os.environ.get("DEMO_MAX_PENDING_JOBS_PER_CLIENT", "4")),
@@ -378,29 +394,46 @@ def main() -> int:
     }
     if args.model_config:
         engine_options["model_config"] = args.model_config
-    engine = DemoEngine(
-        **engine_options,
-    )
+    if args.runtime_root:
+        engine_options["resident_pool_root"] = (
+            Path(args.runtime_root).expanduser() / "resident_adflow" / "worker_0000"
+        )
+    engines = [DemoEngine(**engine_options)]
+    for worker_id in range(1, args.heavy_job_concurrency):
+        worker_options = {
+            **engine_options,
+            "runtime_root": engines[0].runtime_root,
+            "resident_pool_root": (
+                engines[0].runtime_root
+                / "resident_adflow"
+                / f"worker_{worker_id:04d}"
+            ),
+        }
+        engines.append(DemoEngine(**worker_options))
+    engine = engines[0]
     scheduler: JobScheduler | None = None
     try:
         if not args.skip_prewarm:
             print("Prewarming resident MPI workers, pyHyp, and Surrogate…", flush=True)
-            timing = engine.prewarm()
-            print(
-                "Prewarm complete: "
-                f"MPI workers={timing['resident_pool_wall_sec']:.2f}s, "
-                f"pyHyp={timing['pyhyp_wall_sec']:.2f}s, "
-                f"model={timing['inference_wall_sec']:.2f}s",
-                flush=True,
-            )
+            for worker_id, worker_engine in enumerate(engines):
+                timing = worker_engine.prewarm()
+                print(
+                    f"Prewarm worker {worker_id}: "
+                    f"MPI workers={timing['resident_pool_wall_sec']:.2f}s, "
+                    f"pyHyp={timing['pyhyp_wall_sec']:.2f}s, "
+                    f"model={timing['inference_wall_sec']:.2f}s",
+                    flush=True,
+                )
         scheduler = JobScheduler(
-            engine,
+            engines,
             runtime_root=engine.runtime_root / "scheduler",
             max_pending_jobs=args.max_pending_jobs,
             max_pending_jobs_per_client=args.max_pending_jobs_per_client,
             result_ttl_sec=args.job_result_ttl_sec,
             cleanup_interval_sec=args.job_cleanup_interval_sec,
             max_result_bytes=args.job_max_result_bytes,
+            nk_burst_limit=args.nk_burst_limit,
+            cold_start_max_wait_sec=args.cold_start_max_wait_sec,
             action_timeouts={
                 "mesh": args.mesh_job_timeout_sec,
                 "predict": args.predict_job_timeout_sec,
@@ -429,7 +462,9 @@ def main() -> int:
                     "surrogate_host": args.surrogate_host,
                     "surrogate_port": args.surrogate_port,
                     "mpi_ranks": args.mpi_ranks,
-                    "heavy_job_concurrency": 1,
+                    "heavy_job_concurrency": args.heavy_job_concurrency,
+                    "nk_burst_limit": args.nk_burst_limit,
+                    "cold_start_max_wait_sec": args.cold_start_max_wait_sec,
                     "max_pending_jobs": args.max_pending_jobs,
                     "prewarm": not args.skip_prewarm,
                 },
@@ -449,7 +484,8 @@ def main() -> int:
     finally:
         scheduler_stopped = scheduler is None or scheduler.close()
         if scheduler_stopped:
-            engine.close()
+            for worker_engine in engines:
+                worker_engine.close()
         else:
             print(
                 "A compute job is still stopping; the process will release its runtime resources.",

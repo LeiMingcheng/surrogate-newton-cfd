@@ -499,6 +499,7 @@ class DemoEngine:
         checkpoint: Path | None = None,
         statistics: Path | None = None,
         device: str = "cuda:0",
+        resident_pool_root: Path | None = None,
     ) -> None:
         self.runtime_root = Path(runtime_root or _default_runtime_root()).expanduser()
         if not self.runtime_root.is_absolute():
@@ -530,6 +531,11 @@ class DemoEngine:
         self.mesh_root = self.runtime_root / "meshes"
         self.case_root.mkdir(parents=True, exist_ok=True)
         self.mesh_root.mkdir(parents=True, exist_ok=True)
+        self.resident_pool_root = Path(
+            resident_pool_root or (self.runtime_root / "resident_adflow")
+        ).expanduser()
+        if not self.resident_pool_root.is_absolute():
+            raise ValueError("The resident solver pool directory must be absolute.")
         self.client = SurrogateClient(
             SurrogateClientConfig(
                 host=surrogate_host,
@@ -557,7 +563,7 @@ class DemoEngine:
             pool_count=1,
             mpi_launcher=self.mpi_launcher,
             mpi_omp_threads=1,
-            output_dir=self.runtime_root / "resident_adflow",
+            output_dir=self.resident_pool_root,
             ready_timeout_sec=120.0,
             submit_timeout_sec=7200.0,
             request_wait_timeout_sec=7200.0,
@@ -828,7 +834,12 @@ class DemoEngine:
             raise ValueError("Surrogate inference steps must be between 1 and 20.")
         geometry_key = hashlib.sha256(geometry.tobytes()).hexdigest()[:12]
         if geometry_key not in self._meshes:
-            raise ValueError("Generate the geometry mesh before running the surrogate.")
+            persisted_mesh = self.mesh_root / f"{geometry_key}.demo.json"
+            if not persisted_mesh.is_file():
+                raise ValueError("Generate the geometry mesh before running the surrogate.")
+            self._meshes[geometry_key] = json.loads(
+                persisted_mesh.read_text(encoding="utf-8")
+            )
         mesh_lookup_start = time.perf_counter()
         prepared = self.geometry_preparer.prepare(
             {
@@ -1005,6 +1016,7 @@ class DemoEngine:
             ),
             "mpi_ranks": self.mpi_ranks,
         }
+        _json_dump(self.mesh_root / f"{geometry_key}.demo.json", result)
         self._meshes[geometry_key] = result
         return _public_payload(result)
 
