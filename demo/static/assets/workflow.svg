@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 430" role="img" aria-labelledby="title desc">
+  <title id="title">Surrogate–Newton CFD workflow</title>
+  <desc id="desc">Airfoil geometry and flow conditions pass through a surrogate, state injection, and Newton–Krylov correction.</desc>
+  <rect width="1200" height="430" rx="28" fill="#f4f1eb"/>
+  <g fill="none" stroke="#9a7046" stroke-width="4">
+    <path d="M90 215h155M420 215h150M745 215h150"/>
+    <path d="m228 202 17 13-17 13M553 202l17 13-17 13M878 202l17 13-17 13"/>
+  </g>
+  <g font-family="system-ui, sans-serif" text-anchor="middle">
+    <g transform="translate(60 115)">
+      <rect width="170" height="200" rx="18" fill="#fff" stroke="#253543" stroke-width="3"/>
+      <path d="M28 93c37-24 77-27 114 0-39-8-76-6-114 0Z" fill="#d6a05f" stroke="#253543" stroke-width="3"/>
+      <text x="85" y="142" font-size="24" fill="#253543">Geometry</text>
+      <text x="85" y="171" font-size="17" fill="#61707b">Mach · AoA</text>
+    </g>
+    <g transform="translate(245 115)">
+      <rect width="175" height="200" rx="18" fill="#fff" stroke="#c66a2b" stroke-width="4"/>
+      <circle cx="88" cy="77" r="38" fill="#f4d6bf"/>
+      <path d="M55 77h66M88 44v66M64 53l48 48M112 53l-48 48" stroke="#c66a2b" stroke-width="4"/>
+      <text x="88" y="142" font-size="24" fill="#253543">Surrogate</text>
+      <text x="88" y="171" font-size="17" fill="#61707b">Full flow field</text>
+    </g>
+    <g transform="translate(570 115)">
+      <rect width="175" height="200" rx="18" fill="#fff" stroke="#326a9a" stroke-width="4"/>
+      <path d="M45 94h85M45 74h85M45 54h85" stroke="#326a9a" stroke-width="7" stroke-linecap="round"/>
+      <text x="88" y="142" font-size="24" fill="#253543">Injection</text>
+      <text x="88" y="171" font-size="17" fill="#61707b">Solver state</text>
+    </g>
+    <g transform="translate(895 115)">
+      <rect width="245" height="200" rx="18" fill="#253543"/>
+      <path d="M45 87c35-45 75 45 110 0s60 0 60 0" fill="none" stroke="#f1b46d" stroke-width="8" stroke-linecap="round"/>
+      <text x="122" y="142" font-size="24" fill="#fff">NK correction</text>
+      <text x="122" y="171" font-size="17" fill="#dbe3e8">Residual controlled</text>
+    </g>
+  </g>
+</svg>

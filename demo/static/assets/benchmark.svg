@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
+  <title id="title">Benchmark asset pending redistribution clearance</title>
+  <desc id="desc">A project-page placeholder explaining that the publication figure is intentionally not bundled yet.</desc>
+  <rect width="1200" height="520" rx="28" fill="#eef2f3"/>
+  <g transform="translate(110 85)" font-family="system-ui, sans-serif">
+    <rect width="980" height="350" rx="22" fill="#fff" stroke="#cad4d9" stroke-width="3"/>
+    <g fill="none" stroke="#326a9a" stroke-width="5">
+      <path d="M100 125c120-72 250-75 375 0-125-20-250-18-375 0Z"/>
+      <path d="M505 125c120-72 250-75 375 0-125-20-250-18-375 0Z" opacity=".55"/>
+    </g>
+    <text x="490" y="218" text-anchor="middle" font-size="28" fill="#253543">Optimization-derived benchmark</text>
+    <text x="490" y="258" text-anchor="middle" font-size="19" fill="#61707b">Publication evidence asset is intentionally external pending redistribution confirmation.</text>
+    <text x="490" y="303" text-anchor="middle" font-size="17" fill="#9a7046">The interactive geometry and compute workflow remains fully available.</text>
+  </g>
+</svg>

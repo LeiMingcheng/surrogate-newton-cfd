@@ -166,6 +166,39 @@ The container runs as UID 10001. Its writable roots are `/runtime`,
 runtime user. When `/runtime` is a bind mount rather than the supplied named
 volume, give UID 10001 write permission on the host directory before launch.
 
+## Internal interactive demo
+
+A runtime image rebuilt from the demo integration commit contains the
+`surrogate-newton-demo` entry point and `scripts/run_demo_local.sh`. Keep both
+HTTP services on loopback by using Linux host networking rather than publishing
+a container port:
+
+```bash
+docker run --rm --gpus all --network host \
+  --name surrogate-newton-demo \
+  --volume /absolute/path/to/model-release:/models:ro \
+  --volume /absolute/path/to/writable-runtime:/runtime \
+  --volume /absolute/path/to/demo-assets-uiuc:/demo-assets:ro \
+  --env DEMO_AIRFOIL_LIBRARY_ROOT=/demo-assets/uiuc \
+  --env DEMO_WEB_HOST=127.0.0.1 \
+  --env DEMO_WEB_PORT=8080 \
+  --env DEMO_SURROGATE_HOST=127.0.0.1 \
+  --env DEMO_SURROGATE_PORT=65432 \
+  <new-demo-image> \
+  /opt/surrogate-newton/src/scripts/run_demo_local.sh
+```
+
+The full UIUC bundle remains outside the image and is mounted read-only. The
+launcher writes meshes, cases and logs only below `/runtime/demo`. From a local
+workstation, reach the host-loopback service with:
+
+```bash
+ssh -N -L 8080:127.0.0.1:8080 your-server-alias
+```
+
+Do not replace host networking with a public bind address. Public deployment
+requires the separate authentication, proxy, queue, rate-limit and TLS stage.
+
 ## Full RAE2822 acceptance
 
 For the normal-network route, set a model directory and the exact source

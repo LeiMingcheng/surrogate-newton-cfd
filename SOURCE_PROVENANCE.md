@@ -13,7 +13,21 @@ developed in the private PIR-DM research repository.
   `data/common/`
 - Excluded material: datasets, checkpoints, paper sources and figures,
   experiment campaigns, archived configurations, three-dimensional work,
-  browser demo code, logs, caches, and generated outputs
+  logs, caches, and generated outputs
+
+## Interactive demo integration
+
+The public `demo/` package was selectively adapted from the working interactive
+application in the private research repository on 2026-08-11. That source was
+a dirty functional worktree, not a Git merge base. Only the reviewed demo
+backend, browser files, coordinate example, UIUC builder and documentation were
+migrated. Private paths, local launch assumptions, runtime outputs, server
+metadata, manuscript figures and the full UIUC coordinate library were excluded.
+
+The public adaptation uses the repository's maintained model manifest,
+solver-stack installation, geometry preparation, NK pipeline and runtime-path
+protocol. Original non-quantitative SVG placeholders replace manuscript images
+until their website redistribution status is confirmed.
 
 ## Public-release adaptations
 

@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Project page for solver-coupled surrogate–Newton steady CFD.">
+    <title>Surrogate–Newton CFD · Project page</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="/styles.css">
+  </head>
+  <body class="paper-page">
+    <main class="paper-shell">
+      <header class="paper-masthead">
+        <p class="project-label">Surrogate–Newton CFD project page</p>
+        <h1>Reliable and efficient steady CFD from surrogate predictions through Newton–Krylov correction</h1>
+        <p class="paper-subtitle">
+          A solver-coupled framework for fast full-field prediction and residual-controlled correction in steady aerodynamic CFD.
+        </p>
+        <nav class="paper-links" aria-label="Project links">
+          <a href="/demo">Interactive demo</a>
+          <a href="https://arxiv.org/abs/2608.04400" rel="noreferrer">Paper</a>
+          <a href="https://github.com/LeiMingcheng/surrogate-newton-cfd" rel="noreferrer">Code</a>
+          <a href="#abstract">Abstract</a>
+          <a href="#method">Method</a>
+          <a href="#results">Results</a>
+        </nav>
+      </header>
+
+      <figure class="teaser-figure">
+        <img src="/assets/workflow.svg" alt="Solver-coupled surrogate–Newton workflow">
+        <figcaption>
+          The surrogate supplies a full-field initial state; the target CFD solver evaluates and corrects that state with Newton–Krylov updates.
+        </figcaption>
+      </figure>
+
+      <section id="abstract" class="paper-section prose-section">
+        <h2>Abstract</h2>
+        <p>
+          Neural surrogates can rapidly predict complete flow fields, but finite training data limit their reliability when aerodynamic optimization moves into geometrically out-of-distribution regimes. We combine surrogate prediction with nonlinear correction in the target numerical solver. The surrogate is used as an initializer rather than an independently accepted solution, and Newton–Krylov updates use the target discrete residual to recover a solver-evaluated state.
+        </p>
+        <p>
+          The framework is studied on optimization-derived transonic airfoils, online aerodynamic design, and three-dimensional flying-wing configurations. The experiments distinguish prediction accuracy from solver consistency and evaluate the trade-off between learned initialization, correction budget, and conventional cold-start CFD.
+        </p>
+      </section>
+
+      <section id="method" class="paper-section">
+        <h2>Method</h2>
+        <div class="method-steps" aria-label="Method sequence">
+          <article><span>1</span><h3>Surrogate prediction</h3><p>Geometry and flow conditions produce a complete steady-flow estimate.</p></article>
+          <article><span>2</span><h3>State injection</h3><p>The estimate initializes the geometry-matched target discretization.</p></article>
+          <article><span>3</span><h3>NK correction</h3><p>The solver updates the coupled state using its own discrete residual.</p></article>
+        </div>
+      </section>
+
+      <section id="results" class="paper-section">
+        <h2>Optimization-derived OOD evaluation</h2>
+        <p class="section-summary">
+          The benchmark contains geometries visited by aerodynamic optimization rather than small perturbations of one canonical airfoil. The analysis reports physical-space field MSE, aerodynamic-load errors, and the solver residual L2 ratio before and after correction.
+        </p>
+        <figure class="paper-result-figure">
+          <img src="/assets/benchmark.svg" alt="Placeholder for optimization-derived airfoil benchmark evidence">
+          <figcaption>Optimization-generated airfoils provide a geometrically shifted transonic benchmark.</figcaption>
+        </figure>
+        <figure class="paper-result-figure">
+          <img src="/assets/recovery.svg" alt="Placeholder for surrogate and Newton–Krylov recovery evidence">
+          <figcaption>Aggregate metrics, surface pressure, and pressure fields compare the uncorrected surrogate with solver-corrected states.</figcaption>
+        </figure>
+      </section>
+
+      <section class="paper-section demo-callout">
+        <div>
+          <h2>Interactive demonstration</h2>
+          <p>Select or upload an airfoil, edit its geometry, run the Surrogate, and compare it with configurable NK recovery and a cold-start ADflow reference.</p>
+        </div>
+        <a href="/demo">Open demo →</a>
+      </section>
+
+      <footer class="paper-footer">
+        <span>Surrogate–Newton CFD · internal project preview</span>
+        <a href="/demo">Interactive demo</a>
+      </footer>
+    </main>
+  </body>
+</html>

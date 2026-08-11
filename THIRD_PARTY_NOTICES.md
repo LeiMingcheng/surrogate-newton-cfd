@@ -25,6 +25,15 @@ PyYAML, einops, tqdm, cst-modeling3d, TensorBoard, PyVista, and VTK retain their
 own upstream licenses.
 Installing this project does not change those terms.
 
+## Optional UIUC Airfoil Data Site assets
+
+`demo/build_uiuc_library.py` can download and screen coordinate files from the
+UIUC Airfoil Data Site maintained by Michael Selig at
+<https://m-selig.ae.illinois.edu/ads.html>. The complete coordinate library is
+not redistributed in this public Git repository or runtime image while its
+redistribution conditions are being confirmed. It remains an external,
+read-only runtime asset with its own source metadata and checksums.
+
 ## Optional legacy AeroOpt integration
 
 `optimization/aeroopt.py` is an adapter to the legacy `AeroOpt` 0.1.1 API; no

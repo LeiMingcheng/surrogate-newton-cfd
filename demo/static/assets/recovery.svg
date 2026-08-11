@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
+  <title id="title">Recovery result asset pending redistribution clearance</title>
+  <desc id="desc">A project-page placeholder with conceptual residual curves and no quantitative scientific data.</desc>
+  <rect width="1200" height="520" rx="28" fill="#f4f1eb"/>
+  <g transform="translate(105 70)" font-family="system-ui, sans-serif">
+    <rect width="990" height="380" rx="22" fill="#fff" stroke="#d8d0c4" stroke-width="3"/>
+    <path d="M95 75v220h425" fill="none" stroke="#253543" stroke-width="3"/>
+    <path d="M105 105c90 20 145 35 205 70s115 70 190 93" fill="none" stroke="#c66a2b" stroke-width="8" stroke-linecap="round"/>
+    <path d="M105 105c68 62 126 110 190 145s125 25 205 26" fill="none" stroke="#326a9a" stroke-width="8" stroke-linecap="round"/>
+    <g transform="translate(585 95)">
+      <text x="0" y="0" font-size="28" fill="#253543">Solver-corrected recovery</text>
+      <text x="0" y="48" font-size="19" fill="#61707b">Conceptual placeholder only</text>
+      <line x1="0" y1="92" x2="55" y2="92" stroke="#c66a2b" stroke-width="8"/>
+      <text x="75" y="99" font-size="18" fill="#253543">Surrogate estimate</text>
+      <line x1="0" y1="142" x2="55" y2="142" stroke="#326a9a" stroke-width="8"/>
+      <text x="75" y="149" font-size="18" fill="#253543">Newton correction</text>
+      <text x="0" y="218" font-size="17" fill="#9a7046">No manuscript result values are embedded.</text>
+    </g>
+  </g>
+</svg>

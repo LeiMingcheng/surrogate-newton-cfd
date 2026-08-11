@@ -39,6 +39,7 @@ optimization = [
   "pyDOE",
 ]
 dev = [
+  "pytest",
   "ruff",
 ]
 
@@ -47,6 +48,7 @@ surrogate-newton = "surrogate.scripts.main:main"
 surrogate-serving = "surrogate.serving.cli:main"
 nk-resume = "NK_resume.cli:main"
 surrogate-newton-opt = "optimization.cli:main"
+surrogate-newton-demo = "demo.server:main"
 
 [project.urls]
 Homepage = "https://github.com/LeiMingcheng/surrogate-newton-cfd"
@@ -55,7 +57,7 @@ Issues = "https://github.com/LeiMingcheng/surrogate-newton-cfd/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["surrogate*", "NK_resume*", "optimization*", "data*"]
+include = ["surrogate*", "NK_resume*", "optimization*", "data*", "demo*"]
 namespaces = true
 
 [tool.setuptools.package-data]
@@ -68,6 +70,15 @@ optimization = [
   "configs/*.json",
   "templates/Runfiles/*",
   "templates/*.txt",
+]
+demo = [
+  "README.md",
+  "airfoils/README.md",
+  "static/*.html",
+  "static/*.css",
+  "static/*.js",
+  "static/*.txt",
+  "static/assets/*.svg",
 ]
 
 [tool.ruff]

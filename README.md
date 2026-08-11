@@ -18,14 +18,14 @@ Included:
 - model serving for fixed-angle and target-lift requests;
 - solver-consistent field injection and terminal or staged Newton correction;
 - the unified airfoil optimization runtime; and
-- one RAE2822 deployment workflow under `deployment/`.
+- one RAE2822 deployment workflow under `deployment/`; and
+- a loopback-only interactive project page and airfoil workflow under `demo/`.
 
 Not included in this release:
 
 - three-dimensional surrogate or wing support;
 - paper figures, source data, training datasets, or experiment campaign
-  scripts (the inference checkpoint is a separate release asset); and
-- the browser demo or project-page implementation.
+  scripts (the inference checkpoint is a separate release asset).
 
 ## Repository layout
 
@@ -35,6 +35,7 @@ NK_resume/      canonical ADflow correction contracts and MPI execution
 optimization/   shared two-dimensional optimization driver and evaluators
 data/common/    CFD field, mesh, and reference-condition utilities
 deployment/     one end-to-end RAE2822 deployment and its smoke check
+demo/           loopback project page and interactive two-dimensional demo
 docs/           maintained architecture and runtime documentation
 ```
 
@@ -115,6 +116,18 @@ This launches the local surrogate service, builds the RAE2822 authority mesh,
 predicts a five-channel physical flow field, and runs terminal Newton
 correction through ADflow. Detailed prerequisites and outputs are documented in
 [deployment/README.md](deployment/README.md).
+
+For internal interactive use, mount the optional external UIUC asset library
+and start the loopback Web application:
+
+```bash
+export SURROGATE_NEWTON_MODEL_DIR=/path/to/model-2608.04400
+export SURROGATE_NEWTON_RUNTIME_DIR=/path/to/writable-runtime
+export DEMO_AIRFOIL_LIBRARY_ROOT=/path/to/demo-assets-uiuc-v1/uiuc
+./scripts/run_demo_local.sh
+```
+
+See [the demo guide](demo/README.md) for configuration and SSH tunnelling.
 
 Compare a completed run with the sanitized aerolab3 baseline using:
 
