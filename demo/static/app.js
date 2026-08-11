@@ -5,6 +5,14 @@ const STAGE_LABELS = { surrogate: "Surrogate", recovery: "Surrogate + NK", refer
 const NS = "http://www.w3.org/2000/svg";
 const DEFAULT_REYNOLDS_PER_MACH = 22132436.863567192;
 const FIELD_SMOOTHING_PX = 0.7;
+const JOB_POLL_INTERVAL_MS = 750;
+const ACTIVE_JOB_STORAGE_KEY = "surrogate-newton-active-job";
+const JOB_LABELS = {
+  mesh: "Mesh generation and solver preparation",
+  predict: "Surrogate prediction",
+  recover: "Newton–Krylov correction",
+  reference: "Cold-start ADflow reference",
+};
 
 const state = {
   presets: {}, geometry: null, editorGeometry: null,
@@ -12,6 +20,7 @@ const state = {
   existingGeometry: null, selectedAirfoil: "local:rae2822", uiucCatalog: [], uiucSource: null,
   mesh: null, case: null, stages: {}, surrogateOnline: false, solverReady: false,
   busy: false, drag: null, handleCount: 6,
+  activeJobId: null, activeJobAction: null,
   reynoldsPerMach: DEFAULT_REYNOLDS_PER_MACH,
   mpiRanks: 8,
 };
@@ -31,6 +40,8 @@ async function api(path, options = {}) {
   if (!response.ok || payload.ok === false) throw new Error(payload.error || `Request failed (${response.status})`);
   return payload;
 }
+
+const delay = (milliseconds) => new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
 
@@ -57,6 +68,97 @@ function setStageCard(stage, message, className) {
   const card = $(`#stage-${stage}`);
   card.className = `stage-card ${className}`.trim();
   card.querySelector(".stage-state").textContent = message;
+}
+
+function rememberActiveJob(job) {
+  state.activeJobId = job.job_id;
+  state.activeJobAction = job.action;
+  window.sessionStorage.setItem(ACTIVE_JOB_STORAGE_KEY, JSON.stringify({ jobId: job.job_id, action: job.action }));
+}
+
+function forgetActiveJob() {
+  state.activeJobId = null;
+  state.activeJobAction = null;
+  window.sessionStorage.removeItem(ACTIVE_JOB_STORAGE_KEY);
+}
+
+function updateJobPanel(job) {
+  const panel = $("#active-job");
+  panel.hidden = false;
+  panel.dataset.state = job.state;
+  $("#active-job-title").textContent = JOB_LABELS[job.action] || "Compute job";
+  const cancelButton = $("#cancel-job");
+  cancelButton.disabled = !["queued", "running"].includes(job.state) || job.cancel_requested;
+  cancelButton.textContent = job.cancel_requested ? "Cancellation requested" : "Cancel job";
+  if (job.state === "queued") {
+    $("#active-job-detail").textContent = "Waiting for the single compute worker.";
+    $("#active-job-position").textContent = job.queue_position
+      ? `Queue position ${job.queue_position}`
+      : "Queued";
+  } else if (job.state === "running") {
+    $("#active-job-detail").textContent = job.cancel_requested
+      ? "Finishing the current solver call before cancellation."
+      : "The server is executing this job now.";
+    $("#active-job-position").textContent = "Running · concurrency 1";
+  } else {
+    $("#active-job-detail").textContent = job.error || `Job ${job.state}.`;
+    $("#active-job-position").textContent = job.state;
+  }
+}
+
+async function waitForJob(jobId) {
+  let connectionFailures = 0;
+  while (true) {
+    let job;
+    try {
+      const payload = await api(`/api/jobs/${jobId}`);
+      job = payload.job;
+      connectionFailures = 0;
+    } catch (error) {
+      connectionFailures += 1;
+      $("#active-job-detail").textContent = "Temporarily unable to reach the scheduler; retrying…";
+      if (connectionFailures >= 8) throw error;
+      await delay(JOB_POLL_INTERVAL_MS);
+      continue;
+    }
+    updateJobPanel(job);
+    if (job.state === "succeeded") {
+      const payload = await api(job.result_url || `/api/jobs/${jobId}/result`);
+      forgetActiveJob();
+      $("#active-job").hidden = true;
+      return payload.result;
+    }
+    if (["failed", "cancelled", "expired"].includes(job.state)) {
+      forgetActiveJob();
+      const error = new Error(job.error || `Compute job ${job.state}.`);
+      error.jobState = job.state;
+      throw error;
+    }
+    await delay(JOB_POLL_INTERVAL_MS);
+  }
+}
+
+async function runQueuedJob(action, payload) {
+  const submitted = await api("/api/jobs", {
+    method: "POST",
+    body: JSON.stringify({ action, payload }),
+  });
+  rememberActiveJob(submitted.job);
+  updateJobPanel(submitted.job);
+  return waitForJob(submitted.job.job_id);
+}
+
+async function cancelActiveJob() {
+  if (!state.activeJobId) return;
+  const button = $("#cancel-job");
+  button.disabled = true;
+  try {
+    const payload = await api(`/api/jobs/${state.activeJobId}`, { method: "DELETE" });
+    updateJobPanel(payload.job);
+  } catch (error) {
+    button.disabled = false;
+    setMessage(error.message, true);
+  }
 }
 
 function clearCase() {
@@ -515,7 +617,10 @@ async function loadRuntime() {
     state.reynoldsPerMach = Number(status.resources?.reference_state?.reynolds) || DEFAULT_REYNOLDS_PER_MACH;
     syncReferenceState();
     const element = $("#system-status"); element.dataset.state = status.surrogate_online && status.solver_ready ? "online" : "offline";
-    element.querySelector("span:last-child").textContent = status.surrogate_online ? `Surrogate ready${status.prewarm ? " · runtime prewarmed" : ""}` : "Surrogate service offline";
+    const queued = Number(status.scheduler?.queue_depth || 0);
+    element.querySelector("span:last-child").textContent = status.surrogate_online
+      ? `Surrogate ready${status.prewarm ? " · runtime prewarmed" : ""}${queued ? ` · ${queued} queued` : ""}`
+      : "Surrogate service offline";
     if (!status.surrogate_online) setMessage("Geometry editing is available, but the local Surrogate service is offline.", true);
     updateEnabledState();
   } catch (error) {
@@ -626,36 +731,75 @@ async function loadUiucCatalog() {
   }
 }
 
+function applyMeshResult(payload) {
+  state.mesh = payload;
+  $("#mesh-status").classList.add("ready");
+  $("#mesh-status").textContent = `Mesh ${payload.mesh_wall_sec.toFixed(2)} s · ADflow preparation ${payload.adflow_prepare_wall_sec.toFixed(2)} s · MPI ${payload.mpi_ranks}`;
+}
+
+async function resumeActiveJob() {
+  let saved;
+  try {
+    saved = JSON.parse(window.sessionStorage.getItem(ACTIVE_JOB_STORAGE_KEY) || "null");
+  } catch (_error) {
+    window.sessionStorage.removeItem(ACTIVE_JOB_STORAGE_KEY);
+    return;
+  }
+  if (!saved?.jobId || !saved?.action) return;
+  state.activeJobId = saved.jobId;
+  state.activeJobAction = saved.action;
+  setBusy(true, `Restoring ${JOB_LABELS[saved.action] || "compute job"} status…`);
+  try {
+    const result = await waitForJob(saved.jobId);
+    if (saved.action === "mesh") {
+      applyMeshResult(result);
+      setMessage("The queued mesh job completed while this page was open.");
+    } else {
+      syncCase(result);
+      setMessage(`${JOB_LABELS[saved.action] || "Compute job"} complete.`);
+    }
+  } catch (error) {
+    setMessage(error.message, error.jobState !== "cancelled");
+  } finally {
+    setBusy(false);
+  }
+}
+
 async function generateMesh() {
   setBusy(true, `Generating the pyHyp O-grid and preparing the resident ${state.mpiRanks}-rank ADflow solver…`);
   try {
-    const payload = await api("/api/mesh", { method: "POST", body: JSON.stringify({ geometry27: state.geometry.geometry27, name: state.geometry.name }) });
-    state.mesh = payload; $("#mesh-status").classList.add("ready");
-    $("#mesh-status").textContent = `Mesh ${payload.mesh_wall_sec.toFixed(2)} s · ADflow preparation ${payload.adflow_prepare_wall_sec.toFixed(2)} s · MPI ${payload.mpi_ranks}`;
+    const payload = await runQueuedJob("mesh", { geometry27: state.geometry.geometry27, name: state.geometry.name });
+    applyMeshResult(payload);
     setMessage("Mesh generated and the geometry-matched ADflow solver is resident. Surrogate prediction is ready.");
-  } catch (error) { setMessage(error.message, true); } finally { setBusy(false); }
+  } catch (error) { setMessage(error.message, error.jobState !== "cancelled"); } finally { setBusy(false); }
 }
 
 async function runPrediction() {
   setBusy(true, "Evaluating the Surrogate and formal force/residual metrics…"); setStageCard("surrogate", "Running", "running");
   try {
     const steps = Number($("#surrogate-steps").value);
-    const payload = await api("/api/predict", { method: "POST", body: JSON.stringify({ geometry27: state.geometry.geometry27, name: state.geometry.name, mach: Number($("#mach").value), aoa: Number($("#aoa").value), n_inference_steps: steps }) });
+    const payload = await runQueuedJob("predict", { geometry27: state.geometry.geometry27, name: state.geometry.name, mach: Number($("#mach").value), aoa: Number($("#aoa").value), n_inference_steps: steps });
     syncCase(payload); setMessage(`Surrogate complete in ${payload.stage.timing.inference_wall_sec.toFixed(2)} s using ${steps} prediction steps.`);
-  } catch (error) { setStageCard("surrogate", "Failed", "active"); setMessage(error.message, true); } finally { setBusy(false); }
+  } catch (error) {
+    setStageCard("surrogate", error.jobState === "cancelled" ? "Ready" : "Failed", "active");
+    setMessage(error.message, error.jobState !== "cancelled");
+  } finally { setBusy(false); }
 }
 
 async function runRecovery() {
   if (!state.case) return; const cycles = Number($("#nk-cycles").value); const residualExponent = Number($("#nk-stop-exponent").value); const thresholdLabel = residualThresholdLabel(residualExponent);
   setBusy(true, `Running up to ${cycles} Newton–Krylov correction cycles; stopping automatically at residual L2 ratio ${thresholdLabel}…`); setStageCard("recovery", "Running", "running");
   try {
-    const payload = await api(`/api/cases/${state.case.case_id}/recover`, { method: "POST", body: JSON.stringify({ cycles, residual_exponent: residualExponent }) });
+    const payload = await runQueuedJob("recover", { case_id: state.case.case_id, cycles, residual_exponent: residualExponent });
     syncCase(payload);
     const recovery = payload.recovery;
     setMessage(recovery.converged
       ? `Surrogate + NK converged in ${recovery.executed_cycles} of at most ${recovery.cycle_limit} cycles (MPI ${state.mpiRanks}).`
       : `Surrogate + NK reached the ${recovery.cycle_limit}-cycle limit without meeting residual L2 ratio ${thresholdLabel} (MPI ${state.mpiRanks}).`);
-  } catch (error) { setStageCard("recovery", "Failed", "active"); setMessage(error.message, true); } finally { setBusy(false); }
+  } catch (error) {
+    setStageCard("recovery", error.jobState === "cancelled" ? "Awaiting request" : "Failed", "active");
+    setMessage(error.message, error.jobState !== "cancelled");
+  } finally { setBusy(false); }
 }
 
 async function runReference() {
@@ -663,9 +807,12 @@ async function runReference() {
   if (!window.confirm(`Cold-start ADflow uses ${state.mpiRanks} MPI ranks and may take several minutes. Run the reference solve now?`)) return;
   setBusy(true, `Running cold-start ADflow from uniform flow on ${state.mpiRanks} MPI ranks…`); setStageCard("reference", "Running", "running");
   try {
-    const payload = await api(`/api/cases/${state.case.case_id}/reference`, { method: "POST", body: JSON.stringify({ max_cycles: 3000 }) });
+    const payload = await runQueuedJob("reference", { case_id: state.case.case_id, max_cycles: 3000 });
     syncCase(payload); setMessage("ADflow reference complete. Field-error maps and all three comparisons are now available.");
-  } catch (error) { setStageCard("reference", "Failed", ""); setMessage(error.message, true); } finally { setBusy(false); }
+  } catch (error) {
+    setStageCard("reference", error.jobState === "cancelled" ? "Optional" : "Failed", "");
+    setMessage(error.message, error.jobState !== "cancelled");
+  } finally { setBusy(false); }
 }
 
 function bindRange(rangeSelector, numberSelector, callback = null) {
@@ -676,6 +823,7 @@ function bindRange(rangeSelector, numberSelector, callback = null) {
 
 function wireEvents() {
   $("#mesh-button").addEventListener("click", generateMesh); $("#predict-button").addEventListener("click", runPrediction); $("#recover-button").addEventListener("click", runRecovery); $("#reference-button").addEventListener("click", runReference);
+  $("#cancel-job").addEventListener("click", cancelActiveJob);
   $$(".mode-tab").forEach((button) => button.addEventListener("click", () => activateMode(button.dataset.mode)));
   $("#airfoil-search").addEventListener("input", renderAirfoilOptions);
   $("#airfoil-preset").addEventListener("change", (event) => selectExistingAirfoil(event.target.value));
@@ -710,7 +858,11 @@ function wireEvents() {
 
 async function init() {
   drawEditorGrid(); wireEvents(); syncMethodLabels(); syncReferenceState(); await Promise.all([loadRuntime(), loadPresets(), loadUiucCatalog()]); updateEnabledState();
-  if (state.surrogateOnline && state.solverReady) setMessage("Runtime ready. Choose a geometry, then generate its mesh.");
+  if (window.sessionStorage.getItem(ACTIVE_JOB_STORAGE_KEY)) {
+    await resumeActiveJob();
+  } else if (state.surrogateOnline && state.solverReady) {
+    setMessage("Runtime ready. Choose a geometry, then generate its mesh.");
+  }
 }
 
 init().catch((error) => setMessage(error.message, true));

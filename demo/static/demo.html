@@ -17,6 +17,17 @@
         <div id="system-status" class="runtime-status" data-state="pending"><span class="status-dot"></span><span>Checking local runtime…</span></div>
       </header>
 
+      <section id="active-job" class="active-job" aria-live="polite" hidden>
+        <div class="active-job-summary">
+          <span class="job-pulse" aria-hidden="true"></span>
+          <div><strong id="active-job-title">Compute job</strong><span id="active-job-detail">Waiting for scheduler…</span></div>
+        </div>
+        <div class="active-job-actions">
+          <span id="active-job-position"></span>
+          <button id="cancel-job" class="text-button" type="button">Cancel job</button>
+        </div>
+      </section>
+
       <section class="demo-section case-section" aria-labelledby="case-heading">
         <div class="section-heading"><span>1</span><div><h2 id="case-heading">Define the case</h2><p>Select, upload, or deform a two-dimensional airfoil.</p></div></div>
         <div class="case-layout">

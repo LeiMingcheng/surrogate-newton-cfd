@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import ipaddress
 import json
 import os
 import re
@@ -14,6 +15,12 @@ from typing import Any
 from urllib.parse import unquote, urlparse
 
 from demo.compute import MAX_UPLOAD_BYTES, DemoEngine
+from demo.jobs import (
+    JobNotFoundError,
+    JobScheduler,
+    JobStateError,
+    QueueCapacityError,
+)
 
 STATIC_ROOT = Path(__file__).resolve().parent / "static"
 STATIC_ROUTES = {
@@ -35,6 +42,7 @@ STATIC_ROUTES = {
 }
 CASE_ROUTE = re.compile(r"^/api/cases/(case_[A-Za-z0-9_]+)$")
 ACTION_ROUTE = re.compile(r"^/api/cases/(case_[A-Za-z0-9_]+)/(recover|reference)$")
+JOB_ROUTE = re.compile(r"^/api/jobs/(job_[0-9a-f]{32})(/result)?$")
 UIUC_AIRFOIL_ROUTE = re.compile(r"^/api/uiuc/airfoil/([A-Za-z0-9_.+()-]+\.dat)$", re.I)
 CONTENT_TYPES = {
     ".html": "text/html; charset=utf-8",
@@ -54,6 +62,7 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
     """Serve the browser app and expose a narrow same-origin JSON API."""
 
     engine: DemoEngine
+    scheduler: JobScheduler
     server_version = "Surrogate-Newton-Demo/0"
 
     def log_message(self, format: str, *args: Any) -> None:
@@ -85,7 +94,16 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
             Path(part.strip("'\"(),:;")).is_absolute()
             for part in message_text.split()
         )
-        if isinstance(exc, ValueError):
+        if isinstance(exc, QueueCapacityError):
+            status = HTTPStatus.TOO_MANY_REQUESTS
+            message = str(exc)
+        elif isinstance(exc, JobNotFoundError):
+            status = HTTPStatus.NOT_FOUND
+            message = str(exc)
+        elif isinstance(exc, JobStateError):
+            status = HTTPStatus.CONFLICT
+            message = str(exc)
+        elif isinstance(exc, ValueError):
             status = HTTPStatus.BAD_REQUEST
             message = "Request validation failed." if contains_absolute_path else message_text
         elif isinstance(exc, (FileNotFoundError, KeyError)):
@@ -118,11 +136,28 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
             raise ValueError("JSON request must be an object.")
         return payload
 
+    def _client_id(self) -> str:
+        remote = str(self.client_address[0])
+        if ipaddress.ip_address(remote).is_loopback:
+            forwarded = self.headers.get("X-Forwarded-For", "").split(",", 1)[0].strip()
+            if forwarded:
+                try:
+                    return str(ipaddress.ip_address(forwarded))
+                except ValueError:
+                    pass
+        return remote
+
     def do_GET(self) -> None:
         path = unquote(urlparse(self.path).path)
         try:
             if path == "/api/status":
-                self._json({"ok": True, **self.engine.status()})
+                self._json(
+                    {
+                        "ok": True,
+                        **self.engine.status(),
+                        "scheduler": self.scheduler.stats(),
+                    }
+                )
                 return
             if path == "/api/presets":
                 self._json({"ok": True, **self.engine.presets()})
@@ -133,6 +168,14 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
             uiuc_match = UIUC_AIRFOIL_ROUTE.match(path)
             if uiuc_match:
                 self._json({"ok": True, **self.engine.uiuc_airfoil(uiuc_match.group(1))})
+                return
+            job_match = JOB_ROUTE.match(path)
+            if job_match:
+                job_id, result_suffix = job_match.groups()
+                if result_suffix:
+                    self._json({"ok": True, "result": self.scheduler.result(job_id)})
+                else:
+                    self._json({"ok": True, "job": self.scheduler.get(job_id)})
                 return
             match = CASE_ROUTE.match(path)
             if match:
@@ -149,6 +192,7 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
             if path not in {
                 "/api/geometry/import",
                 "/api/geometry/project",
+                "/api/jobs",
                 "/api/predict",
                 "/api/mesh",
             } and action_match is None:
@@ -170,33 +214,46 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
                     payload["lower"],
                     str(payload.get("name") or "Edited airfoil"),
                 )
-            elif path == "/api/predict":
-                result = self.engine.predict(
-                    geometry27=payload["geometry27"],
-                    mach=float(payload["mach"]),
-                    aoa=float(payload["aoa"]),
-                    n_inference_steps=int(payload.get("n_inference_steps", 5)),
-                    name=str(payload.get("name") or "Demo airfoil"),
+            elif path == "/api/jobs":
+                job = self.scheduler.submit(
+                    str(payload.get("action") or ""),
+                    payload.get("payload") or {},
+                    client_id=self._client_id(),
                 )
-            elif path == "/api/mesh":
-                result = self.engine.prepare_mesh(
-                    geometry27=payload["geometry27"],
-                    name=str(payload.get("name") or "Demo airfoil"),
+                self._json({"ok": True, "job": job}, status=HTTPStatus.ACCEPTED)
+                return
+            elif path in {"/api/predict", "/api/mesh"}:
+                job = self.scheduler.submit(
+                    "predict" if path == "/api/predict" else "mesh",
+                    payload,
+                    client_id=self._client_id(),
                 )
+                self._json({"ok": True, "job": job}, status=HTTPStatus.ACCEPTED)
+                return
             else:
                 case_id, action = action_match.groups()
-                if action == "recover":
-                    result = self.engine.recover(
-                        case_id,
-                        cycles=int(payload.get("cycles", 6)),
-                        residual_exponent=int(payload.get("residual_exponent", 8)),
-                    )
-                else:
-                    result = self.engine.reference(
-                        case_id,
-                        max_cycles=int(payload.get("max_cycles", 3000)),
-                    )
+                job = self.scheduler.submit(
+                    action,
+                    {"case_id": case_id, **payload},
+                    client_id=self._client_id(),
+                )
+                self._json({"ok": True, "job": job}, status=HTTPStatus.ACCEPTED)
+                return
             self._json({"ok": True, **result})
+        except Exception as exc:
+            self._error(exc)
+
+    def do_DELETE(self) -> None:
+        path = unquote(urlparse(self.path).path)
+        try:
+            job_match = JOB_ROUTE.match(path)
+            if job_match is None or job_match.group(2):
+                self._json(
+                    {"ok": False, "error": "Unknown API route."},
+                    status=HTTPStatus.NOT_FOUND,
+                )
+                return
+            self._json({"ok": True, "job": self.scheduler.cancel(job_match.group(1))})
         except Exception as exc:
             self._error(exc)
 
@@ -248,6 +305,51 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--checkpoint")
     parser.add_argument("--statistics")
     parser.add_argument("--device", default=os.environ.get("DEMO_DEVICE", "cuda:0"))
+    parser.add_argument(
+        "--max-pending-jobs",
+        type=int,
+        default=int(os.environ.get("DEMO_MAX_PENDING_JOBS", "64")),
+    )
+    parser.add_argument(
+        "--max-pending-jobs-per-client",
+        type=int,
+        default=int(os.environ.get("DEMO_MAX_PENDING_JOBS_PER_CLIENT", "4")),
+    )
+    parser.add_argument(
+        "--job-result-ttl-sec",
+        type=float,
+        default=float(os.environ.get("DEMO_JOB_RESULT_TTL_SEC", "86400")),
+    )
+    parser.add_argument(
+        "--job-cleanup-interval-sec",
+        type=float,
+        default=float(os.environ.get("DEMO_JOB_CLEANUP_INTERVAL_SEC", "60")),
+    )
+    parser.add_argument(
+        "--job-max-result-bytes",
+        type=int,
+        default=int(os.environ.get("DEMO_JOB_MAX_RESULT_BYTES", str(64 * 1024 * 1024))),
+    )
+    parser.add_argument(
+        "--mesh-job-timeout-sec",
+        type=float,
+        default=float(os.environ.get("DEMO_MESH_JOB_TIMEOUT_SEC", "600")),
+    )
+    parser.add_argument(
+        "--predict-job-timeout-sec",
+        type=float,
+        default=float(os.environ.get("DEMO_PREDICT_JOB_TIMEOUT_SEC", "600")),
+    )
+    parser.add_argument(
+        "--recover-job-timeout-sec",
+        type=float,
+        default=float(os.environ.get("DEMO_RECOVER_JOB_TIMEOUT_SEC", "7200")),
+    )
+    parser.add_argument(
+        "--reference-job-timeout-sec",
+        type=float,
+        default=float(os.environ.get("DEMO_REFERENCE_JOB_TIMEOUT_SEC", "7200")),
+    )
     parser.add_argument("--skip-prewarm", action="store_true")
     return parser
 
@@ -279,6 +381,7 @@ def main() -> int:
     engine = DemoEngine(
         **engine_options,
     )
+    scheduler: JobScheduler | None = None
     try:
         if not args.skip_prewarm:
             print("Prewarming resident MPI workers, pyHyp, and Surrogate…", flush=True)
@@ -290,10 +393,25 @@ def main() -> int:
                 f"model={timing['inference_wall_sec']:.2f}s",
                 flush=True,
             )
+        scheduler = JobScheduler(
+            engine,
+            runtime_root=engine.runtime_root / "scheduler",
+            max_pending_jobs=args.max_pending_jobs,
+            max_pending_jobs_per_client=args.max_pending_jobs_per_client,
+            result_ttl_sec=args.job_result_ttl_sec,
+            cleanup_interval_sec=args.job_cleanup_interval_sec,
+            max_result_bytes=args.job_max_result_bytes,
+            action_timeouts={
+                "mesh": args.mesh_job_timeout_sec,
+                "predict": args.predict_job_timeout_sec,
+                "recover": args.recover_job_timeout_sec,
+                "reference": args.reference_job_timeout_sec,
+            },
+        )
         handler = type(
             "ConfiguredDemoRequestHandler",
             (DemoRequestHandler,),
-            {"engine": engine},
+            {"engine": engine, "scheduler": scheduler},
         )
         server = ThreadingHTTPServer((args.host, int(args.port)), handler)
         server.daemon_threads = True
@@ -311,6 +429,8 @@ def main() -> int:
                     "surrogate_host": args.surrogate_host,
                     "surrogate_port": args.surrogate_port,
                     "mpi_ranks": args.mpi_ranks,
+                    "heavy_job_concurrency": 1,
+                    "max_pending_jobs": args.max_pending_jobs,
                     "prewarm": not args.skip_prewarm,
                 },
                 sort_keys=True,
@@ -327,7 +447,14 @@ def main() -> int:
         finally:
             server.server_close()
     finally:
-        engine.close()
+        scheduler_stopped = scheduler is None or scheduler.close()
+        if scheduler_stopped:
+            engine.close()
+        else:
+            print(
+                "A compute job is still stopping; the process will release its runtime resources.",
+                flush=True,
+            )
     return 0
 
 

@@ -114,6 +114,15 @@ environment variables:
 | `DEMO_COMPUTE_RESIDUALS` | `1` | Enable model residual diagnostics |
 | `DEMO_AIRFOIL_LIBRARY_ROOT` | package asset path | Optional UIUC library mount |
 | `DEMO_OOD_ASSET_ROOT` | unset | Optional validated OOD geometry-distance bundle |
+| `DEMO_MAX_PENDING_JOBS` | `64` | Global queued plus running job capacity |
+| `DEMO_MAX_PENDING_JOBS_PER_CLIENT` | `4` | Per-client queued plus running capacity |
+| `DEMO_JOB_RESULT_TTL_SEC` | `86400` | Result retention after terminal state |
+| `DEMO_JOB_CLEANUP_INTERVAL_SEC` | `60` | Expired-result cleanup interval |
+| `DEMO_JOB_MAX_RESULT_BYTES` | `67108864` | Maximum serialized result size per job |
+| `DEMO_MESH_JOB_TIMEOUT_SEC` | `600` | Mesh/preparation job time limit |
+| `DEMO_PREDICT_JOB_TIMEOUT_SEC` | `600` | Surrogate prediction job time limit |
+| `DEMO_RECOVER_JOB_TIMEOUT_SEC` | `7200` | Newton–Krylov recovery job time limit |
+| `DEMO_REFERENCE_JOB_TIMEOUT_SEC` | `7200` | Cold-start reference job time limit |
 
 `SURROGATE_NEWTON_PYTHON` can explicitly select a Python executable. Solver
 modules and `mpiexec`/`mpirun` are resolved from the installed solver stack and
@@ -136,11 +145,36 @@ parameters, including the fixed `0.002c` trailing-edge thickness.
 - `GET /api/uiuc/airfoil/{filename}`
 - `POST /api/geometry/import`
 - `POST /api/geometry/project`
-- `POST /api/mesh`
-- `POST /api/predict`
+- `POST /api/jobs`
+- `GET /api/jobs/{job_id}`
+- `GET /api/jobs/{job_id}/result`
+- `DELETE /api/jobs/{job_id}`
 - `GET /api/cases/{case_id}`
-- `POST /api/cases/{case_id}/recover`
-- `POST /api/cases/{case_id}/reference`
+
+Submit `mesh`, `predict`, `recover`, or `reference` with:
+
+```json
+{
+  "action": "mesh",
+  "payload": {
+    "geometry27": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    "name": "Example"
+  }
+}
+```
+
+Production requests require exactly 27 finite numeric values. All heavyweight actions are persisted in
+SQLite and executed by one worker, so simultaneous HTTP requests cannot launch
+two ADflow computations. States are `queued`, `running`, `succeeded`, `failed`,
+`cancelled`, and `expired`. Queued cancellation is immediate. A running solver
+call cannot be interrupted safely, so cancellation becomes effective after the
+current engine call returns. Jobs left in `running` by a restart are marked
+failed, while queued jobs remain eligible for execution.
+
+The legacy `POST /api/mesh`, `POST /api/predict`, and case action routes remain
+available as enqueue-only compatibility endpoints and return HTTP 202 with a
+job descriptor; they no longer execute work in the HTTP request thread.
 
 The browser talks only to the same-origin JSON API. It never connects directly
 to the native pickle transport.

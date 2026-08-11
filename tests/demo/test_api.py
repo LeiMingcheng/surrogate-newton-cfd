@@ -3,12 +3,15 @@ from __future__ import annotations
 import json
 import tempfile
 import threading
+import time
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from http.client import HTTPConnection
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 from demo.compute import DemoEngine
+from demo.jobs import JobScheduler
 from demo.server import DemoRequestHandler
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -49,10 +52,15 @@ class DemoApiTests(unittest.TestCase):
             airfoil_library_root=cls.asset_root,
             surrogate_port=9,
         )
+        cls.scheduler = JobScheduler(
+            cls.engine,
+            runtime_root=cls.temp_root / "scheduler",
+            autostart=False,
+        )
         handler = type(
             "TestDemoRequestHandler",
             (DemoRequestHandler,),
-            {"engine": cls.engine},
+            {"engine": cls.engine, "scheduler": cls.scheduler},
         )
         cls.server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
         cls.server.daemon_threads = True
@@ -65,6 +73,7 @@ class DemoApiTests(unittest.TestCase):
         cls.server.shutdown()
         cls.server.server_close()
         cls.thread.join(timeout=5)
+        cls.scheduler.close()
         cls.engine.close()
         cls.temp.cleanup()
 
@@ -101,6 +110,7 @@ class DemoApiTests(unittest.TestCase):
         self.assertEqual(status_code, 200)
         self.assertFalse(status["surrogate_online"])
         self.assertTrue(status["airfoil_library_available"])
+        self.assertEqual(status["scheduler"]["concurrency_limit"], 1)
         presets_code, presets = self.request("GET", "/api/presets")
         self.assertEqual(presets_code, 200)
         self.assertEqual([item["name"] for item in presets["presets"]], ["RAE2822", "OAT15A"])
@@ -173,6 +183,48 @@ class DemoApiTests(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertIn(".dat", response["error"])
 
+    def test_job_submit_query_cancel_and_result_state(self) -> None:
+        submit_code, submitted = self.request(
+            "POST",
+            "/api/jobs",
+            {
+                "action": "mesh",
+                "payload": {"geometry27": [0.0] * 27, "name": "Queued fixture"},
+            },
+        )
+        self.assertEqual(submit_code, 202)
+        job_id = str(submitted["job"]["job_id"])
+        self.assertEqual(submitted["job"]["state"], "queued")
+        query_code, queried = self.request("GET", f"/api/jobs/{job_id}")
+        self.assertEqual(query_code, 200)
+        self.assertEqual(queried["job"]["queue_position"], 1)
+        cancel_code, cancelled = self.request("DELETE", f"/api/jobs/{job_id}")
+        self.assertEqual(cancel_code, 200)
+        self.assertEqual(cancelled["job"]["state"], "cancelled")
+        result_code, result = self.request("GET", f"/api/jobs/{job_id}/result")
+        self.assertEqual(result_code, 409)
+        self.assertFalse(result["ok"])
+
+    def test_legacy_heavy_route_also_enqueues(self) -> None:
+        submit_code, submitted = self.request(
+            "POST",
+            "/api/mesh",
+            {"geometry27": [0.0] * 27, "name": "Legacy fixture"},
+        )
+        self.assertEqual(submit_code, 202)
+        self.assertEqual(submitted["job"]["action"], "mesh")
+        self.assertEqual(submitted["job"]["state"], "queued")
+        self.request("DELETE", f"/api/jobs/{submitted['job']['job_id']}")
+
+    def test_job_payload_validation_happens_before_enqueue(self) -> None:
+        status, response = self.request(
+            "POST",
+            "/api/jobs",
+            {"action": "predict", "payload": {"geometry27": [0.0] * 27, "mach": 2}},
+        )
+        self.assertEqual(status, 400)
+        self.assertFalse(response["ok"])
+
     def test_static_routes_return_self_contained_assets(self) -> None:
         routes = (
             "/",
@@ -194,6 +246,104 @@ class DemoApiTests(unittest.TestCase):
                 self.assertEqual(status, 200)
                 self.assertTrue(content_type)
                 self.assertTrue(body)
+
+
+class ConcentratedAccessApiTests(unittest.TestCase):
+    class Engine:
+        def __init__(self) -> None:
+            self.lock = threading.Lock()
+            self.active = 0
+            self.max_active = 0
+
+        def prepare_mesh(self, **payload: object) -> dict[str, object]:
+            with self.lock:
+                self.active += 1
+                self.max_active = max(self.max_active, self.active)
+            try:
+                time.sleep(0.02)
+                return {"name": payload["name"], "queued_test": True}
+            finally:
+                with self.lock:
+                    self.active -= 1
+
+    def setUp(self) -> None:
+        temp_parent = REPO_ROOT / "tmp"
+        temp_parent.mkdir(exist_ok=True)
+        self.temp = tempfile.TemporaryDirectory(prefix="demo-load-api-", dir=temp_parent)
+        self.engine = self.Engine()
+        self.scheduler = JobScheduler(
+            self.engine,
+            runtime_root=Path(self.temp.name) / "scheduler",
+            max_pending_jobs=32,
+            max_pending_jobs_per_client=2,
+            cleanup_interval_sec=1,
+        )
+        handler = type(
+            "LoadTestDemoRequestHandler",
+            (DemoRequestHandler,),
+            {"engine": self.engine, "scheduler": self.scheduler},
+        )
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        self.server.daemon_threads = True
+        self.port = int(self.server.server_address[1])
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+
+    def tearDown(self) -> None:
+        self.server.shutdown()
+        self.server.server_close()
+        self.thread.join(timeout=5)
+        self.scheduler.close(timeout=5)
+        self.temp.cleanup()
+
+    def request(
+        self,
+        method: str,
+        path: str,
+        payload: object | None = None,
+        *,
+        forwarded_for: str | None = None,
+    ) -> tuple[int, dict[str, object]]:
+        connection = HTTPConnection("127.0.0.1", self.port, timeout=10)
+        body = None if payload is None else json.dumps(payload)
+        headers = {} if body is None else {"Content-Type": "application/json"}
+        if forwarded_for:
+            headers["X-Forwarded-For"] = forwarded_for
+        connection.request(method, path, body=body, headers=headers)
+        response = connection.getresponse()
+        result = json.loads(response.read().decode("utf-8"))
+        connection.close()
+        return response.status, result
+
+    def test_twelve_simultaneous_http_clients_are_serialized(self) -> None:
+        def submit(index: int) -> str:
+            status, response = self.request(
+                "POST",
+                "/api/jobs",
+                {
+                    "action": "mesh",
+                    "payload": {"geometry27": [0.0] * 27, "name": f"visitor-{index}"},
+                },
+                forwarded_for=f"198.51.100.{index + 1}",
+            )
+            self.assertEqual(status, 202)
+            return str(response["job"]["job_id"])
+
+        with ThreadPoolExecutor(max_workers=12) as executor:
+            job_ids = list(executor.map(submit, range(12)))
+
+        deadline = time.monotonic() + 8
+        pending = set(job_ids)
+        while pending and time.monotonic() < deadline:
+            for job_id in list(pending):
+                status, response = self.request("GET", f"/api/jobs/{job_id}")
+                self.assertEqual(status, 200)
+                if response["job"]["state"] == "succeeded":
+                    pending.remove(job_id)
+            time.sleep(0.01)
+
+        self.assertFalse(pending)
+        self.assertEqual(self.engine.max_active, 1)
 
 
 if __name__ == "__main__":
