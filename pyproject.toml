@@ -79,6 +79,8 @@ demo = [
   "static/*.js",
   "static/*.txt",
   "static/assets/*.svg",
+  "static/assets/*.jpg",
+  "static/assets/*.png",
 ]
 
 [tool.ruff]

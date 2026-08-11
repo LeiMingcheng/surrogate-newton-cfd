@@ -28,6 +28,10 @@ STATIC_ROUTES = {
     "/assets/workflow.svg": "assets/workflow.svg",
     "/assets/benchmark.svg": "assets/benchmark.svg",
     "/assets/recovery.svg": "assets/recovery.svg",
+    "/assets/paper-workflow.jpg": "assets/paper-workflow.jpg",
+    "/assets/paper-ood-benchmark.jpg": "assets/paper-ood-benchmark.jpg",
+    "/assets/paper-recovery.jpg": "assets/paper-recovery.jpg",
+    "/assets/paper-optimization.png": "assets/paper-optimization.png",
 }
 CASE_ROUTE = re.compile(r"^/api/cases/(case_[A-Za-z0-9_]+)$")
 ACTION_ROUTE = re.compile(r"^/api/cases/(case_[A-Za-z0-9_]+)/(recover|reference)$")
@@ -38,6 +42,8 @@ CONTENT_TYPES = {
     ".js": "text/javascript; charset=utf-8",
     ".svg": "image/svg+xml",
     ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
     ".json": "application/json; charset=utf-8",
     ".dat": "text/plain; charset=utf-8",
     ".txt": "text/plain; charset=utf-8",

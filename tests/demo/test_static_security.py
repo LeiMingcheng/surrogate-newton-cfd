@@ -44,6 +44,14 @@ class DemoStaticSecurityTests(unittest.TestCase):
             "/assets/workflow.svg": DEMO_ROOT / "static" / "assets" / "workflow.svg",
             "/assets/benchmark.svg": DEMO_ROOT / "static" / "assets" / "benchmark.svg",
             "/assets/recovery.svg": DEMO_ROOT / "static" / "assets" / "recovery.svg",
+            "/assets/paper-workflow.jpg": DEMO_ROOT / "static" / "assets" / "paper-workflow.jpg",
+            "/assets/paper-ood-benchmark.jpg": (
+                DEMO_ROOT / "static" / "assets" / "paper-ood-benchmark.jpg"
+            ),
+            "/assets/paper-recovery.jpg": DEMO_ROOT / "static" / "assets" / "paper-recovery.jpg",
+            "/assets/paper-optimization.png": (
+                DEMO_ROOT / "static" / "assets" / "paper-optimization.png"
+            ),
         }
         html_files = (DEMO_ROOT / "static" / "index.html", DEMO_ROOT / "static" / "demo.html")
         for html_path in html_files:
@@ -92,6 +100,8 @@ class DemoStaticSecurityTests(unittest.TestCase):
         self.assertIn('surrogate-newton-demo = "demo.server:main"', pyproject)
         self.assertIn('"demo*"', pyproject)
         self.assertIn('"static/assets/*.svg"', pyproject)
+        self.assertIn('"static/assets/*.jpg"', pyproject)
+        self.assertIn('"static/assets/*.png"', pyproject)
 
 
 if __name__ == "__main__":

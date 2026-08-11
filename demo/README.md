@@ -34,9 +34,9 @@ machine-readable `manifest.json` and `SHA256SUMS`. The application continues to
 offer presets, uploads, geometry projection and status reporting when this
 optional library is absent.
 
-The three project-page illustrations under `static/assets/` are original,
-non-quantitative placeholders. They intentionally do not copy manuscript
-figures whose public-website redistribution has not yet been confirmed.
+The project page includes four figures from the accompanying arXiv manuscript
+under `static/assets/`. They present the published workflow, OOD benchmark,
+recovery comparison and online optimization evidence.
 
 The optional geometry-distance badge needs the two offline analysis assets
 `cst26_coefficients.npz` and `ood_scores.csv`. Point `DEMO_OOD_ASSET_ROOT` at a

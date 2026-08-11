@@ -183,6 +183,10 @@ class DemoApiTests(unittest.TestCase):
             "/assets/workflow.svg",
             "/assets/benchmark.svg",
             "/assets/recovery.svg",
+            "/assets/paper-workflow.jpg",
+            "/assets/paper-ood-benchmark.jpg",
+            "/assets/paper-recovery.jpg",
+            "/assets/paper-optimization.png",
         )
         for route in routes:
             with self.subTest(route=route):
