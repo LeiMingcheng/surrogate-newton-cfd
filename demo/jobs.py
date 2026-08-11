@@ -538,6 +538,7 @@ class JobScheduler:
                     job_id,
                 ),
             )
+        self._delete_job_directory(job_id)
 
     def _run_job(self, row: sqlite3.Row) -> None:
         job_id = str(row["job_id"])
