@@ -248,6 +248,7 @@ class JobSchedulerTests(unittest.TestCase):
             ("mesh", {"geometry27": [0.0] * 26}),
             ("predict", {"geometry27": GEOMETRY27, "mach": 1.2, "aoa": 0}),
             ("recover", {"case_id": "../case", "cycles": 6}),
+            ("reference", {"case_id": "case_ok", "max_cycles": 24}),
             ("reference", {"case_id": "case_ok", "max_cycles": 3001}),
         ]
         for action, payload in invalid_payloads:

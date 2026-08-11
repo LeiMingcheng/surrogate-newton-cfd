@@ -123,7 +123,7 @@ def validate_job_payload(action: str, payload: dict[str, Any]) -> dict[str, Any]
         normalized["max_cycles"] = _require_number(
             payload,
             "max_cycles",
-            minimum=1,
+            minimum=25,
             maximum=3000,
             integer=True,
             default=3000,
