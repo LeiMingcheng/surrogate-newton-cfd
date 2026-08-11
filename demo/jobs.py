@@ -580,6 +580,8 @@ class JobScheduler:
             ).fetchall()
             job_ids = [str(row["job_id"]) for row in rows]
             if job_ids:
+                for job_id in job_ids:
+                    self._delete_job_directory(job_id)
                 connection.executemany(
                     """
                     UPDATE jobs SET state = 'expired', updated_at = ?, result_path = NULL
@@ -587,8 +589,6 @@ class JobScheduler:
                     """,
                     [(now, job_id) for job_id in job_ids],
                 )
-        for job_id in job_ids:
-            self._delete_job_directory(job_id)
         return len(job_ids)
 
     def close(self, *, timeout: float | None = 10.0) -> bool:
