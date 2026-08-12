@@ -7,7 +7,7 @@ adflow_root=/opt/solver-stack/adflow
 cgnsutilities_root=/opt/solver-stack/cgnsutilities
 model_dir=${SURROGATE_NEWTON_MODEL_DIR:-/models}
 runtime_dir=${SURROGATE_NEWTON_RUNTIME_DIR:-/runtime}
-checkpoint="$model_dir/fsb-dit-airfoil-2608.04400.pt"
+checkpoint="$model_dir/fsb-dit-airfoil-2608.04400-inference.pt"
 stats="$model_dir/turbulent-scale-stats.json"
 result_dir="$runtime_dir/rae2822"
 

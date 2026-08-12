@@ -128,7 +128,7 @@ fsb:
     - 0
     eta: 0.0
 runtime:
-  checkpoint: artifacts/fsb-dit-airfoil-2608.04400.pt
+  checkpoint: artifacts/fsb-dit-airfoil-2608.04400-inference.pt
   device: cuda
 evaluation:
   output_dir: outputs/evaluation

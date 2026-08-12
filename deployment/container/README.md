@@ -32,13 +32,25 @@ only to permit this documented hybrid, not to choose the MPI or PETSc variant.
 
 The public pyHyp and ADflow forks and the upstream CGNS/cgnsutilities
 repositories expose the commits recorded in `solver-stack.lock.yaml`. The
-model release is independent: place the paired
-checkpoint and statistics in one host directory, with the filenames and
-digests from `model-manifest.json`.
+model release is independent: download the paired inference checkpoint and
+statistics into one host directory, with the filenames and digests from
+`model-manifest.json`:
+
+```bash
+scripts/download_checkpoint.sh /absolute/path/to/model-release
+```
 
 The remote host needs a working NVIDIA driver, Docker Engine, Compose, and the
 NVIDIA Container Toolkit. Keep at least 100 GB free for build layers, Conda and
-PyTorch packages, the 1.4 GB checkpoint, runtime data, and one rollback image.
+PyTorch packages, the 362 MB inference checkpoint, runtime data, and one
+rollback image.
+
+Keep the model release outside the runtime image and mount it read-only at
+`/models`. This avoids duplicating weights in image layers, allows code and
+model rollbacks to remain independent, and supports digest verification before
+container startup. For a genuinely disconnected one-file demonstration, build
+a separately tagged derived image that copies the already verified artifact
+pair; do not replace the normal external-mount release with that image.
 
 ## Build
 

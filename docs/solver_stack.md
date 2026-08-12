@@ -96,6 +96,6 @@ python deployment/smoke_check.py --level runtime \
   --pyhyp-root /path/to/solver-stack/pyhyp \
   --adflow-root /path/to/solver-stack/adflow \
   --cgnsutilities-root /path/to/solver-stack/cgnsutilities \
-  --checkpoint artifacts/fsb-dit-airfoil-2608.04400.pt \
+  --checkpoint artifacts/fsb-dit-airfoil-2608.04400-inference.pt \
   --stats artifacts/turbulent-scale-stats.json
 ```

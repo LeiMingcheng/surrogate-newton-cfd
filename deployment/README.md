@@ -52,7 +52,7 @@ python deployment/smoke_check.py \
   --level result \
   --pyhyp-root ../pyhyp \
   --adflow-root ../adflow \
-  --checkpoint artifacts/fsb-dit-airfoil-2608.04400.pt \
+  --checkpoint artifacts/fsb-dit-airfoil-2608.04400-inference.pt \
   --stats artifacts/turbulent-scale-stats.json \
   --result-dir outputs/rae2822
 ```
