@@ -1,0 +1,68 @@
+services:
+  demo:
+    image: ${RUNTIME_IMAGE:?set RUNTIME_IMAGE to an immutable release tag}
+    container_name: surrogate-newton-demo
+    entrypoint: ["/opt/surrogate-newton/src/scripts/run_demo_local.sh"]
+    network_mode: host
+    restart: unless-stopped
+    init: true
+    gpus: all
+    env_file: public.env
+    environment:
+      DEMO_WEB_HOST: 127.0.0.1
+      DEMO_WEB_PORT: "18082"
+      DEMO_SURROGATE_HOST: 127.0.0.1
+      DEMO_SURROGATE_PORT: "65432"
+      DEMO_PUBLIC_MODE: "1"
+      DEMO_SESSION_SECRET_FILE: /run/secrets/demo_session_secret
+      DEMO_HEAVY_JOB_CONCURRENCY: "1"
+      DEMO_MPI_RANKS: "8"
+    volumes:
+      - ${MODEL_DIR:?set MODEL_DIR}:/models:ro
+      - ${RUNTIME_DIR:?set RUNTIME_DIR}:/runtime
+      - ${UIUC_DIR:?set UIUC_DIR}:/demo-assets/uiuc:ro
+      - ${SESSION_SECRET_FILE:?set SESSION_SECRET_FILE}:/run/secrets/demo_session_secret:ro
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=2g,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:18082/api/health/ready', timeout=10).read()"
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 240s
+    logging:
+      driver: json-file
+      options:
+        max-size: 20m
+        max-file: "5"
+
+  caddy:
+    image: caddy:2.11.4-alpine
+    container_name: surrogate-newton-caddy
+    network_mode: host
+    restart: unless-stopped
+    env_file: public.env
+    depends_on:
+      demo:
+        condition: service_healthy
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${CADDY_DATA_DIR:?set CADDY_DATA_DIR}:/data
+      - ${CADDY_CONFIG_DIR:?set CADDY_CONFIG_DIR}:/config
+    read_only: true
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,size=64m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"

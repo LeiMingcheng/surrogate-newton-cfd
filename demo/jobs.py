@@ -11,6 +11,7 @@ import sqlite3
 import threading
 import time
 import uuid
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any, Callable
 
@@ -165,6 +166,11 @@ class JobScheduler:
         action_timeouts: dict[str, float] | None = None,
         nk_burst_limit: int = 3,
         cold_start_max_wait_sec: float = 300.0,
+        case_root: Path | None = None,
+        case_ttl_sec: float | None = None,
+        enforce_case_ownership: bool = False,
+        hard_timeout_handler: Callable[[dict[str, Any]], None] | None = None,
+        cancel_grace_sec: float = 30.0,
         autostart: bool = True,
         clock: Callable[[], float] = time.time,
     ) -> None:
@@ -185,6 +191,13 @@ class JobScheduler:
         self.max_result_bytes = int(max_result_bytes)
         self.nk_burst_limit = int(nk_burst_limit)
         self.cold_start_max_wait_sec = float(cold_start_max_wait_sec)
+        self.case_root = (
+            None if case_root is None else Path(case_root).expanduser().resolve()
+        )
+        self.case_ttl_sec = float(case_ttl_sec or result_ttl_sec)
+        self.enforce_case_ownership = bool(enforce_case_ownership)
+        self.hard_timeout_handler = hard_timeout_handler
+        self.cancel_grace_sec = float(cancel_grace_sec)
         self.action_timeouts = {
             "mesh": 600.0,
             "predict": 600.0,
@@ -194,12 +207,18 @@ class JobScheduler:
         }
         if self.max_pending_jobs < 1 or self.max_pending_jobs_per_client < 1:
             raise ValueError("Scheduler queue limits must be positive.")
-        if self.result_ttl_sec <= 0 or self.cleanup_interval_sec <= 0:
+        if (
+            self.result_ttl_sec <= 0
+            or self.case_ttl_sec <= 0
+            or self.cleanup_interval_sec <= 0
+        ):
             raise ValueError("Scheduler TTL and cleanup interval must be positive.")
         if self.max_payload_bytes < 1024 or self.max_result_bytes < 1024:
             raise ValueError("Scheduler payload and result limits are too small.")
         if self.nk_burst_limit < 1 or self.cold_start_max_wait_sec <= 0:
             raise ValueError("Scheduler priority limits must be positive.")
+        if self.cancel_grace_sec <= 0:
+            raise ValueError("The running-job cancellation grace must be positive.")
         if set(self.action_timeouts) != set(JOB_ACTIONS) or any(
             float(value) <= 0 for value in self.action_timeouts.values()
         ):
@@ -210,6 +229,8 @@ class JobScheduler:
         self._threads: list[threading.Thread] = []
         self.root.mkdir(parents=True, exist_ok=True)
         self.job_root.mkdir(parents=True, exist_ok=True)
+        if self.case_root is not None:
+            self.case_root.mkdir(parents=True, exist_ok=True)
         self._initialize_database()
         self._recover_interrupted_jobs()
         if autostart:
@@ -221,8 +242,22 @@ class JobScheduler:
         connection.execute("PRAGMA busy_timeout = 30000")
         return connection
 
+    @contextmanager
+    def _connection(self) -> Any:
+        """Commit or roll back and always close a short-lived SQLite connection."""
+
+        connection = self._connect()
+        try:
+            yield connection
+            connection.commit()
+        except BaseException:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
     def _initialize_database(self) -> None:
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.execute("PRAGMA journal_mode = WAL")
             connection.execute("PRAGMA synchronous = NORMAL")
             connection.executescript(
@@ -256,6 +291,15 @@ class JobScheduler:
                     ON jobs(client_id, state);
                 CREATE INDEX IF NOT EXISTS jobs_expiry
                     ON jobs(expires_at, state);
+                CREATE TABLE IF NOT EXISTS cases (
+                    case_id TEXT PRIMARY KEY,
+                    client_id TEXT NOT NULL,
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL,
+                    expires_at REAL NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS cases_expiry
+                    ON cases(expires_at);
                 """
             )
             columns = {
@@ -275,7 +319,7 @@ class JobScheduler:
 
     def _recover_interrupted_jobs(self) -> None:
         now = self._clock()
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.execute(
                 """
                 UPDATE jobs
@@ -300,6 +344,14 @@ class JobScheduler:
             )
             for worker_id, engine in enumerate(self.engines)
         ]
+        if self.hard_timeout_handler is not None:
+            self._threads.append(
+                threading.Thread(
+                    target=self._watchdog_loop,
+                    name="demo-heavy-job-watchdog",
+                    daemon=True,
+                )
+            )
         for thread in self._threads:
             thread.start()
         self._wake.set()
@@ -326,8 +378,12 @@ class JobScheduler:
             ).encode("utf-8")
             resource_key = f"geometry:{hashlib.sha256(geometry_bytes).hexdigest()}"
         now = self._clock()
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
+            if action in {"recover", "reference"} and self.enforce_case_ownership:
+                self._authorize_case_in_connection(
+                    str(normalized["case_id"]), safe_client_id, connection, touch=True
+                )
             pending = int(
                 connection.execute(
                     "SELECT COUNT(*) FROM jobs WHERE state IN ('queued', 'running')"
@@ -367,7 +423,7 @@ class JobScheduler:
                 ),
             )
         self._wake.set()
-        return self.get(job_id)
+        return self.get(job_id, client_id=safe_client_id)
 
     def _row(self, job_id: str, connection: sqlite3.Connection) -> sqlite3.Row:
         if not JOB_ID_PATTERN.fullmatch(job_id):
@@ -410,13 +466,21 @@ class JobScheduler:
             "error": row["error"],
         }
 
-    def get(self, job_id: str) -> dict[str, Any]:
-        with self._connect() as connection:
-            return self._serialize_row(self._row(job_id, connection), connection)
+    @staticmethod
+    def _authorize_job(row: sqlite3.Row, client_id: str | None) -> None:
+        if client_id is not None and str(row["client_id"]) != str(client_id):
+            raise JobNotFoundError("Job not found.")
 
-    def result(self, job_id: str) -> Any:
-        with self._connect() as connection:
+    def get(self, job_id: str, *, client_id: str | None = None) -> dict[str, Any]:
+        with self._connection() as connection:
             row = self._row(job_id, connection)
+            self._authorize_job(row, client_id)
+            return self._serialize_row(row, connection)
+
+    def result(self, job_id: str, *, client_id: str | None = None) -> Any:
+        with self._connection() as connection:
+            row = self._row(job_id, connection)
+            self._authorize_job(row, client_id)
             if row["state"] != "succeeded":
                 raise JobStateError(f"Job result is unavailable while state is {row['state']}.")
         result_path = self._result_path(job_id)
@@ -426,11 +490,12 @@ class JobScheduler:
             raise JobStateError("Job result exceeds the server limit.")
         return json.loads(result_path.read_text(encoding="utf-8"))
 
-    def cancel(self, job_id: str) -> dict[str, Any]:
+    def cancel(self, job_id: str, *, client_id: str | None = None) -> dict[str, Any]:
         now = self._clock()
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
             row = self._row(job_id, connection)
+            self._authorize_job(row, client_id)
             if row["state"] == "queued":
                 connection.execute(
                     """
@@ -452,7 +517,7 @@ class JobScheduler:
         return summary
 
     def stats(self) -> dict[str, Any]:
-        with self._connect() as connection:
+        with self._connection() as connection:
             counts = {
                 row["state"]: int(row["count"])
                 for row in connection.execute(
@@ -464,6 +529,7 @@ class JobScheduler:
                 "WHERE state = 'running' ORDER BY started_at"
             ).fetchall()
             running_jobs = [dict(row) for row in running_rows]
+            case_count = int(connection.execute("SELECT COUNT(*) FROM cases").fetchone()[0])
         return {
             "concurrency_limit": len(self.engines),
             "queue_depth": counts.get("queued", 0),
@@ -473,6 +539,9 @@ class JobScheduler:
             "max_pending_jobs": self.max_pending_jobs,
             "max_pending_jobs_per_client": self.max_pending_jobs_per_client,
             "result_ttl_sec": self.result_ttl_sec,
+            "case_ttl_sec": self.case_ttl_sec,
+            "retained_cases": case_count,
+            "hard_timeout_watchdog": self.hard_timeout_handler is not None,
             "priority_policy": {
                 "nk_burst_limit": self.nk_burst_limit,
                 "cold_start_max_wait_sec": self.cold_start_max_wait_sec,
@@ -481,7 +550,7 @@ class JobScheduler:
 
     def _claim_next(self) -> sqlite3.Row | None:
         now = self._clock()
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
             eligible = connection.execute(
                 """
@@ -576,7 +645,7 @@ class JobScheduler:
     def _finish_success(self, job_id: str, result: Any) -> None:
         self._store_result(job_id, result)
         now = self._clock()
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
             row = self._row(job_id, connection)
             if row["cancel_requested"]:
@@ -598,10 +667,15 @@ class JobScheduler:
                     """,
                     (now, now, now + self.result_ttl_sec, job_id),
                 )
+                case_id = result.get("case_id") if isinstance(result, dict) else None
+                if row["action"] == "predict" and isinstance(case_id, str):
+                    self._register_case_in_connection(
+                        case_id, str(row["client_id"]), connection, now=now
+                    )
 
     def _finish_failure(self, job_id: str, exc: Exception) -> None:
         now = self._clock()
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
             row = self._row(job_id, connection)
             cancelled = bool(row["cancel_requested"])
@@ -643,6 +717,35 @@ class JobScheduler:
                 continue
             self._run_job(engine, row)
 
+    def _watchdog_loop(self) -> None:
+        """Escalate a stuck native/MPI call to the process supervisor."""
+
+        escalated: set[str] = set()
+        while not self._stop.wait(1.0):
+            now = self._clock()
+            with self._connection() as connection:
+                rows = connection.execute(
+                    "SELECT job_id, action, started_at, updated_at, timeout_sec, "
+                    "cancel_requested FROM jobs WHERE state = 'running'"
+                ).fetchall()
+            for row in rows:
+                timed_out = now >= float(row["started_at"]) + float(row["timeout_sec"])
+                cancelled_stuck = bool(row["cancel_requested"]) and (
+                    now >= float(row["updated_at"]) + self.cancel_grace_sec
+                )
+                job_id = str(row["job_id"])
+                if not (timed_out or cancelled_stuck) or job_id in escalated:
+                    continue
+                escalated.add(job_id)
+                assert self.hard_timeout_handler is not None
+                self.hard_timeout_handler(
+                    {
+                        "job_id": job_id,
+                        "action": str(row["action"]),
+                        "reason": "timeout" if timed_out else "cancel_timeout",
+                    }
+                )
+
     def _delete_job_directory(self, job_id: str) -> None:
         directory = self._job_directory(job_id)
         if directory.is_dir():
@@ -650,7 +753,7 @@ class JobScheduler:
 
     def cleanup_expired(self) -> int:
         now = self._clock()
-        with self._connect() as connection:
+        with self._connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
             rows = connection.execute(
                 """
@@ -671,7 +774,90 @@ class JobScheduler:
                     """,
                     [(now, job_id) for job_id in job_ids],
                 )
-        return len(job_ids)
+            expired_cases = connection.execute(
+                """
+                SELECT case_id FROM cases
+                 WHERE expires_at <= ?
+                   AND NOT EXISTS (
+                       SELECT 1 FROM jobs
+                        WHERE state IN ('queued', 'running')
+                          AND resource_key = 'case:' || cases.case_id
+                   )
+                """,
+                (now,),
+            ).fetchall()
+            case_ids = [str(row["case_id"]) for row in expired_cases]
+            for case_id in case_ids:
+                self._delete_case_directory(case_id)
+            if case_ids:
+                connection.executemany(
+                    "DELETE FROM cases WHERE case_id = ?",
+                    [(case_id,) for case_id in case_ids],
+                )
+        return len(job_ids) + len(case_ids)
+
+    def _register_case_in_connection(
+        self,
+        case_id: str,
+        client_id: str,
+        connection: sqlite3.Connection,
+        *,
+        now: float | None = None,
+    ) -> None:
+        if not CASE_ID_PATTERN.fullmatch(case_id):
+            raise ValueError("case_id is invalid.")
+        timestamp = self._clock() if now is None else now
+        connection.execute(
+            """
+            INSERT INTO cases(case_id, client_id, created_at, updated_at, expires_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(case_id) DO UPDATE SET
+                updated_at = excluded.updated_at,
+                expires_at = excluded.expires_at
+            """,
+            (case_id, client_id, timestamp, timestamp, timestamp + self.case_ttl_sec),
+        )
+
+    def register_case(self, case_id: str, client_id: str) -> None:
+        with self._connection() as connection:
+            self._register_case_in_connection(case_id, client_id, connection)
+
+    def _authorize_case_in_connection(
+        self,
+        case_id: str,
+        client_id: str,
+        connection: sqlite3.Connection,
+        *,
+        touch: bool,
+    ) -> None:
+        if not CASE_ID_PATTERN.fullmatch(case_id):
+            raise FileNotFoundError("Case not found.")
+        row = connection.execute(
+            "SELECT client_id FROM cases WHERE case_id = ?", (case_id,)
+        ).fetchone()
+        if row is None or str(row["client_id"]) != str(client_id):
+            raise FileNotFoundError("Case not found.")
+        if touch:
+            now = self._clock()
+            connection.execute(
+                "UPDATE cases SET updated_at = ?, expires_at = ? WHERE case_id = ?",
+                (now, now + self.case_ttl_sec, case_id),
+            )
+
+    def authorize_case(self, case_id: str, client_id: str, *, touch: bool = True) -> None:
+        with self._connection() as connection:
+            self._authorize_case_in_connection(
+                case_id, client_id, connection, touch=touch
+            )
+
+    def _delete_case_directory(self, case_id: str) -> None:
+        if self.case_root is None or not CASE_ID_PATTERN.fullmatch(case_id):
+            return
+        directory = (self.case_root / case_id).resolve()
+        if directory.parent != self.case_root.resolve():
+            raise RuntimeError("Unsafe case cleanup path.")
+        if directory.is_dir():
+            shutil.rmtree(directory)
 
     def close(self, *, timeout: float | None = 10.0) -> bool:
         self._stop.set()

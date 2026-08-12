@@ -23,6 +23,7 @@ mpi_launcher=${DEMO_MPI_LAUNCHER:-auto}
 prewarm=${DEMO_PREWARM:-1}
 start_surrogate=${DEMO_START_SURROGATE:-1}
 compute_residuals=${DEMO_COMPUTE_RESIDUALS:-1}
+public_mode=${DEMO_PUBLIC_MODE:-0}
 
 if [[ "$web_host" != "127.0.0.1" && "$web_host" != "localhost" ]]; then
     echo "DEMO_WEB_HOST must remain on the loopback interface." >&2
@@ -130,6 +131,11 @@ if [[ "$prewarm" != "1" ]]; then
     prewarm_args=(--skip-prewarm)
 fi
 
+public_args=()
+if [[ "$public_mode" == "1" ]]; then
+    public_args=(--public-mode)
+fi
+
 echo "Starting loopback demo at http://$web_host:$web_port/"
 echo "MPI ranks per solver case: $mpi_ranks"
 "$python_bin" -m demo.server \
@@ -146,6 +152,7 @@ echo "MPI ranks per solver case: $mpi_ranks"
     --checkpoint "$checkpoint" \
     --statistics "$statistics" \
     --device cuda:0 \
+    "${public_args[@]}" \
     "${prewarm_args[@]}" &
 web_pid=$!
 wait "$web_pid"

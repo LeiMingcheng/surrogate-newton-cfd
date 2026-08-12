@@ -6,10 +6,11 @@ import threading
 import time
 import unittest
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from pathlib import Path
 from typing import Any
 
-from demo.jobs import JobScheduler, JobStateError, QueueCapacityError
+from demo.jobs import JobNotFoundError, JobScheduler, JobStateError, QueueCapacityError
 
 GEOMETRY27 = [0.0] * 27
 
@@ -282,10 +283,12 @@ class JobSchedulerTests(unittest.TestCase):
         queued = first_scheduler.submit(
             "mesh", {"geometry27": GEOMETRY27, "name": "queued"}, client_id="two"
         )
-        with sqlite3.connect(first_scheduler.db_path) as connection:
-            connection.execute(
-                "UPDATE jobs SET state = 'running' WHERE job_id = ?", (running["job_id"],)
-            )
+        with closing(sqlite3.connect(first_scheduler.db_path)) as connection:
+            with connection:
+                connection.execute(
+                    "UPDATE jobs SET state = 'running' WHERE job_id = ?",
+                    (running["job_id"],),
+                )
         first_scheduler.close()
 
         restarted = self.scheduler(engine, autostart=False)
@@ -325,6 +328,71 @@ class JobSchedulerTests(unittest.TestCase):
         for action, payload in invalid_payloads:
             with self.subTest(action=action), self.assertRaises(ValueError):
                 scheduler.submit(action, payload, client_id="client")
+
+    def test_job_and_case_ownership_hide_other_sessions(self) -> None:
+        engine = FakeEngine()
+        case_root = self.root.parent / "cases"
+        (case_root / "case_owned").mkdir(parents=True)
+        scheduler = self.scheduler(
+            engine,
+            autostart=False,
+            case_root=case_root,
+            enforce_case_ownership=True,
+        )
+        scheduler.register_case("case_owned", "owner")
+        job = scheduler.submit(
+            "recover", {"case_id": "case_owned", "cycles": 2}, client_id="owner"
+        )
+        self.assertEqual(scheduler.get(job["job_id"], client_id="owner")["state"], "queued")
+        with self.assertRaises(JobNotFoundError):
+            scheduler.get(job["job_id"], client_id="other")
+        with self.assertRaises(FileNotFoundError):
+            scheduler.authorize_case("case_owned", "other")
+        with self.assertRaises(FileNotFoundError):
+            scheduler.submit(
+                "reference",
+                {"case_id": "case_owned", "max_cycles": 25},
+                client_id="other",
+            )
+
+    def test_case_ttl_removes_only_registered_case_directory(self) -> None:
+        engine = FakeEngine()
+        case_root = self.root.parent / "cases"
+        owned = case_root / "case_expiring"
+        unrelated = case_root / "keep-this"
+        owned.mkdir(parents=True)
+        unrelated.mkdir(parents=True)
+        scheduler = self.scheduler(
+            engine,
+            autostart=False,
+            case_root=case_root,
+            case_ttl_sec=0.01,
+        )
+        scheduler.register_case("case_expiring", "owner")
+        time.sleep(0.02)
+        self.assertEqual(scheduler.cleanup_expired(), 1)
+        self.assertFalse(owned.exists())
+        self.assertTrue(unrelated.exists())
+
+    def test_watchdog_escalates_stuck_native_call(self) -> None:
+        gate = threading.Event()
+        escalated = threading.Event()
+        scheduler = self.scheduler(
+            FakeEngine(gate=gate),
+            action_timeouts={
+                "mesh": 0.05,
+                "predict": 1,
+                "recover": 1,
+                "reference": 1,
+            },
+            hard_timeout_handler=lambda _event: escalated.set(),
+            cleanup_interval_sec=1,
+        )
+        scheduler.submit(
+            "mesh", {"geometry27": GEOMETRY27, "name": "stuck"}, client_id="owner"
+        )
+        self.assertTrue(escalated.wait(timeout=2))
+        gate.set()
 
 
 if __name__ == "__main__":
