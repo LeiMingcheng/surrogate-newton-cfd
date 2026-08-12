@@ -24,6 +24,14 @@ head -c 48 /dev/urandom > /data/surrogate-newton/secrets/demo-session-secret
 docker run --rm caddy:2.11.4-alpine caddy hash-password --plaintext 'choose-a-long-password'
 ```
 
+The runtime image uses fixed UID/GID `10001:10001`. Create the persistent
+runtime directory before first launch and give that exact account ownership;
+otherwise prewarm will fail before the HTTP listener starts:
+
+```bash
+sudo install -d -o 10001 -g 10001 -m 0775 /data/surrogate-newton/runtime/current
+```
+
 Set the host paths and immutable image tag outside the env file, validate the
 rendered Compose model, then start it:
 
