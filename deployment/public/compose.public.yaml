@@ -22,6 +22,7 @@ services:
       - ${MODEL_DIR:?set MODEL_DIR}:/models:ro
       - ${RUNTIME_DIR:?set RUNTIME_DIR}:/runtime
       - ${UIUC_DIR:?set UIUC_DIR}:/demo-assets/uiuc:ro
+      - ${OOD_DIR:?set OOD_DIR}:/demo-assets/ood:ro
       - ${SESSION_SECRET_FILE:?set SESSION_SECRET_FILE}:/run/secrets/demo_session_secret:ro
     read_only: true
     tmpfs:
@@ -43,27 +44,3 @@ services:
       options:
         max-size: 20m
         max-file: "5"
-
-  caddy:
-    image: caddy:2.11.4-alpine
-    container_name: surrogate-newton-caddy
-    network_mode: host
-    restart: unless-stopped
-    env_file: public.env
-    depends_on:
-      demo:
-        condition: service_healthy
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - ${CADDY_DATA_DIR:?set CADDY_DATA_DIR}:/data
-      - ${CADDY_CONFIG_DIR:?set CADDY_CONFIG_DIR}:/config
-    read_only: true
-    tmpfs:
-      - /tmp:rw,nosuid,nodev,size=64m,mode=1777
-    security_opt:
-      - no-new-privileges:true
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
