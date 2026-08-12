@@ -881,7 +881,7 @@ class JobScheduler:
         geometry_key = mesh.get("geometry_key") if isinstance(mesh, dict) else None
         if not isinstance(geometry_key, str) or not re.fullmatch(r"[0-9a-f]{12}", geometry_key):
             return None, None
-        if not isinstance(geometry_id, str) or not re.fullmatch(r"[0-9a-f]{64}", geometry_id):
+        if not isinstance(geometry_id, str) or not re.fullmatch(r"[0-9a-f]{16}", geometry_id):
             return None, None
         return geometry_key, geometry_id
 
@@ -987,11 +987,15 @@ class JobScheduler:
 
     def _delete_geometry_artifacts(self, geometry_key: str, geometry_id: str) -> None:
         if not re.fullmatch(r"[0-9a-f]{12}", geometry_key) or not re.fullmatch(
-            r"[0-9a-f]{64}", geometry_id
+            r"[0-9a-f]{16}", geometry_id
         ):
             return
         if self.mesh_root is not None:
-            for name in (f"{geometry_key}.demo.json", f"{geometry_id}.cgns"):
+            for name in (
+                f"{geometry_key}.demo.json",
+                f"{geometry_id}.cgns",
+                f"{geometry_id}.cgns.lock",
+            ):
                 path = self._safe_cache_path(self.mesh_root, name)
                 if path.is_file():
                     path.unlink()

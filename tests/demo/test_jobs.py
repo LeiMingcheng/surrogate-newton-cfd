@@ -380,10 +380,11 @@ class JobSchedulerTests(unittest.TestCase):
         mesh_root = self.root.parent / "meshes"
         solver_root = self.root.parent / "solver_prepare"
         geometry_key = "a" * 12
-        geometry_id = "b" * 64
+        geometry_id = "b" * 16
         mesh_root.mkdir(parents=True)
         (mesh_root / f"{geometry_key}.demo.json").write_text("{}")
         (mesh_root / f"{geometry_id}.cgns").write_bytes(b"fixture")
+        (mesh_root / f"{geometry_id}.cgns.lock").write_bytes(b"")
         (mesh_root / "keep.txt").write_text("keep")
         (solver_root / geometry_key).mkdir(parents=True)
         scheduler = self.scheduler(
@@ -403,6 +404,7 @@ class JobSchedulerTests(unittest.TestCase):
         self.assertEqual(scheduler.cleanup_expired(), 1)
         self.assertFalse((mesh_root / f"{geometry_key}.demo.json").exists())
         self.assertFalse((mesh_root / f"{geometry_id}.cgns").exists())
+        self.assertFalse((mesh_root / f"{geometry_id}.cgns.lock").exists())
         self.assertFalse((solver_root / geometry_key).exists())
         self.assertTrue((mesh_root / "keep.txt").exists())
 
