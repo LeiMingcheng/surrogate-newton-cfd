@@ -12,6 +12,7 @@ from typing import Any, Protocol
 import numpy as np
 
 from NK_resume import (
+    NKWorkPlan,
     ResidentWarmPoolController,
     build_direct_case,
     build_fsb_case,
@@ -470,6 +471,146 @@ class SurrogateNKEvaluator:
         self.config = config
         self.resident_pool = resident_pool
 
+    def _project_cases(
+        self,
+        cases: list[Any],
+        plan: Any,
+        iteration_root: Path,
+    ) -> Any:
+        export = create_pipeline().export_cases(cases, plan, output_dir=str(iteration_root))
+        if self.resident_pool is None:
+            return create_pipeline().project_manifest_warm_pools(
+                export.manifest_path,
+                ranks_per_case=self.config.nk.ranks_per_case,
+                pool_count=min(self.config.nk.pool_count, len(cases)),
+                mpi_launcher=self.config.nk.mpi_launcher,
+                mpi_omp_threads=self.config.nk.mpi_omp_threads,
+                output_dir=iteration_root / "runtime",
+                ready_timeout_sec=self.config.nk.timeout_s,
+                submit_timeout_sec=self.config.nk.timeout_s,
+                wait_for_manifest_sec=self.config.nk.timeout_s,
+            )
+        return self.resident_pool.project(
+            export.manifest_path,
+            output_dir=iteration_root / "runtime",
+        )
+
+    def _evaluate_native_solvecl(
+        self,
+        *,
+        workdir: Path,
+        prepared: Any,
+        mesh_path: Path,
+        model_key: str,
+        predictor_kind: str,
+        aoa: np.ndarray,
+        fields: np.ndarray,
+        started: float,
+    ) -> CandidateEvaluation:
+        builder = build_direct_case if predictor_kind == "direct" else build_fsb_case
+        cases = []
+        for index, mach in enumerate(self.config.task.mach):
+            cases.append(
+                builder(
+                    case_id=f"{workdir.name}_mach{index:02d}_solvecl",
+                    cgns_basename=mesh_path.name,
+                    cgns_root=mesh_path.parent,
+                    prediction_field=fields[index],
+                    flow_conditions=(
+                        mach,
+                        aoa[index],
+                        self.config.task.reynolds_for(mach),
+                    ),
+                    flow_conditions_dict={
+                        "mach": mach,
+                        "aoa": aoa[index],
+                        "reynolds": self.config.task.reynolds_for(mach),
+                        "temperature": 300.0,
+                        "x_ref": 0.25,
+                    },
+                    coords_center=prepared.coords,
+                    coords_vertex=prepared.coords_vertex,
+                    output_dir=workdir / "nk",
+                    options_version=self.config.nk.options_version,
+                    l2conv=self.config.nk.residual_tolerance,
+                    ranks_per_case=self.config.nk.ranks_per_case,
+                    mpi_launcher=self.config.nk.mpi_launcher,
+                    mpi_omp_threads=self.config.nk.mpi_omp_threads,
+                    fixed_lift={
+                        "target_cl": self.config.task.target_cl,
+                        "cl_tolerance": self.config.nk.cl_tolerance,
+                        "max_aoa_solves": self.config.nk.max_aoa_solves,
+                        "total_time_limit_s": self.config.nk.total_time_limit_s,
+                        "cl_alpha_guess": self.config.nk.initial_cl_alpha,
+                        "delta_alpha": 0.5,
+                    },
+                    model_metadata={"model_key": model_key},
+                    runtime_metadata={"optimization_sample": workdir.name},
+                )
+            )
+        plan = finalonly_plan(
+            predictor_kind,
+            work=NKWorkPlan.ank_nk(
+                max_work=self.config.nk.max_work_per_flow_solve,
+                time_limit_s=self.config.nk.total_time_limit_s,
+                nk_switch_tolerance=self.config.nk.nk_switch_tolerance,
+            ),
+        )
+        root = workdir / "nk" / "native_solvecl"
+        projected = self._project_cases(cases, plan, root)
+        elapsed = time.perf_counter() - started
+        points: list[OperatingPointResult] = []
+        for index, result_path in enumerate(projected.result_paths):
+            payload = json.loads(Path(result_path).read_text(encoding="utf-8"))
+            stage = payload["stages"][-1]
+            metrics = stage["metrics"]
+            force = dict(metrics["force_coefficients"])
+            fixed_lift = dict(metrics["fixed_lift"])
+            solver_work = dict(metrics["solver_work"])
+            points.append(
+                OperatingPointResult(
+                    mach=float(self.config.task.mach[index]),
+                    target_cl=float(self.config.task.target_cl),
+                    reynolds=self.config.task.reynolds_for(self.config.task.mach[index]),
+                    aoa=float(fixed_lift["final_alpha"]),
+                    cl=float(force["cl"]),
+                    cd=float(force["cd"]),
+                    cm=float(force["cm"]),
+                    converged=bool(
+                        fixed_lift["target_cl_converged"]
+                        and solver_work["termination"] == "converged"
+                    ),
+                    n_iter=int(fixed_lift["flow_solve_calls"]),
+                    residual=solver_work.get("verified_l2_ratio"),
+                    wall_time_s=float(elapsed / len(cases)),
+                    field_path=str(stage.get("output_paths", {}).get("post_field", "")),
+                    provenance={
+                        "model_key": model_key,
+                        "result_path": result_path,
+                        "resume_mode": "ank_nk",
+                        "fixed_lift_driver": "ADFLOW.solveCL",
+                        "cl_tolerance": self.config.nk.cl_tolerance,
+                        "max_work_per_flow_solve": self.config.nk.max_work_per_flow_solve,
+                        "solver_work": solver_work,
+                    },
+                )
+            )
+        return CandidateEvaluation(
+            evaluator=self.name,
+            points=tuple(points),
+            wall_time_s=float(elapsed),
+            provenance={
+                "model_key": model_key,
+                "plan": "finalonly",
+                "resume_mode": "ank_nk",
+                "fixed_lift_driver": "ADFLOW.solveCL",
+                "mesh_path": str(mesh_path),
+                "pool_count": min(self.config.nk.pool_count, len(cases)),
+                "ranks_per_case": self.config.nk.ranks_per_case,
+                "resident_pool": self.resident_pool is not None,
+            },
+        )
+
     def evaluate(
         self,
         geometry: PreparedCandidateGeometry,
@@ -499,6 +640,17 @@ class SurrogateNKEvaluator:
         )
         aoa = _as_vector(response, "aoa", count)
         fields = np.asarray(response["fields"])
+        if self.config.nk.resume_mode == "ank_nk":
+            return self._evaluate_native_solvecl(
+                workdir=workdir,
+                prepared=prepared,
+                mesh_path=mesh_path,
+                model_key=model_key,
+                predictor_kind=predictor_kind,
+                aoa=aoa,
+                fields=fields,
+                started=start,
+            )
         active = list(range(count))
         histories: list[list[dict[str, float]]] = [[] for _ in range(count)]
         best_payloads: list[dict[str, Any] | None] = [None] * count
@@ -506,8 +658,10 @@ class SurrogateNKEvaluator:
         pipeline = create_pipeline()
         plan = finalonly_plan(
             predictor_kind,
-            adaptive_cycles=self.config.nk.adaptive_cycles,
-            adaptive_threshold=self.config.nk.residual_tolerance,
+            work=NKWorkPlan.repeated_nk(
+                self.config.nk.repeated_nk_cycles,
+                threshold=self.config.nk.residual_tolerance,
+            ),
         )
 
         for correction in range(self.config.nk.max_corrections + 1):

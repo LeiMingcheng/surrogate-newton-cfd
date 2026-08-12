@@ -9,7 +9,7 @@ from typing import Any
 
 from .exceptions import NotMigratedError
 from .orchestration import run_manifest
-from .plans import NKWorkPlan, alternating_plan, finalonly_plan
+from .plans import NKWorkPlan, ResumeMode, alternating_plan, finalonly_plan
 from .pipeline import create_pipeline
 
 
@@ -22,8 +22,17 @@ def _build_parser() -> argparse.ArgumentParser:
     plan_parser = sub.add_parser("validate-plan", help="Construct and validate a canonical plan.")
     plan_parser.add_argument("--kind", choices=("finalonly", "alternating"), required=True)
     plan_parser.add_argument("--predictor-kind", choices=("direct", "fsb"), default="fsb")
-    plan_parser.add_argument("--nk-work", choices=("adaptive", "fixed"), default="adaptive")
-    plan_parser.add_argument("--fixed-cycles", type=int, default=0)
+    plan_parser.add_argument(
+        "--resume-mode",
+        choices=tuple(mode.value for mode in ResumeMode),
+        default="",
+        help="Default: ank_nk for finalonly, repeated_nk for alternating.",
+    )
+    plan_parser.add_argument("--max-work", type=int, default=2000)
+    plan_parser.add_argument("--time-limit-s", type=float, default=10.0)
+    plan_parser.add_argument("--l2conv", type=float, default=1.0e-8)
+    plan_parser.add_argument("--nk-switch-tol", type=float, default=1.0e-4)
+    plan_parser.add_argument("--repeated-nk-cycles", default="6,8,10")
 
     replay_parser = sub.add_parser(
         "replay",
@@ -123,6 +132,8 @@ def main(argv: list[str] | None = None) -> int:
                 "status": "clean boundary with ADflow projection adapters",
                 "legacy_runtime_imports": False,
                 "interaction_plan_kinds": ["finalonly", "alternating"],
+                "terminal_resume_modes": [mode.value for mode in ResumeMode],
+                "default_terminal_resume_mode": ResumeMode.ANK_NK.value,
                 "stage_work_policies": ["adaptive", "fixed"],
                 "solver_backends": [
                     "adflow_single_case",
@@ -134,10 +145,28 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "validate-plan":
-        work = None
-        if args.nk_work == "fixed":
-            fixed_cycles = int(args.fixed_cycles) if int(args.fixed_cycles) > 0 else 10
-            work = NKWorkPlan.fixed(fixed_cycles)
+        default_mode = (
+            ResumeMode.ANK_NK
+            if args.kind == "finalonly"
+            else ResumeMode.REPEATED_NK
+        )
+        resume_mode = ResumeMode(args.resume_mode) if args.resume_mode else default_mode
+        if resume_mode == ResumeMode.ANK_NK:
+            work = NKWorkPlan.ank_nk(
+                max_work=int(args.max_work),
+                time_limit_s=float(args.time_limit_s),
+                nk_switch_tolerance=float(args.nk_switch_tol),
+            )
+        else:
+            repeated_cycles = tuple(
+                int(value.strip())
+                for value in str(args.repeated_nk_cycles).split(",")
+                if value.strip()
+            )
+            work = NKWorkPlan.repeated_nk(
+                repeated_cycles,
+                threshold=float(args.l2conv),
+            )
         if args.kind == "finalonly":
             plan = finalonly_plan(args.predictor_kind, work=work)
         else:

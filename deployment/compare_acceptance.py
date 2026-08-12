@@ -29,6 +29,20 @@ def main() -> int:
         raise SystemExit(f"expected one projection result, found {len(result_paths)}")
     projection = json.loads(result_paths[0].read_text(encoding="utf-8"))
     stage = projection["stages"][-1]
+    solver_work = stage["metrics"]["solver_work"]
+    actual_mode = str(solver_work["resume_mode"])
+    expected_mode = str(baseline["case"]["resume_mode"])
+    if actual_mode != expected_mode:
+        payload = {
+            "status": "failed",
+            "baseline": str(Path(args.baseline).expanduser().resolve()),
+            "result_dir": str(result_dir),
+            "checks": {"resume_mode": False},
+            "observed": {"resume_mode": actual_mode},
+            "expected": {"resume_mode": expected_mode},
+        }
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 1
     corrected = stage["metrics"]["force_coefficients"]
     residual = stage["metrics"]["nk_residual_contract"]
     expected = baseline["expected"]
@@ -44,6 +58,7 @@ def main() -> int:
     checks: dict[str, bool] = {
         name: value == expected[name] for name, value in shapes.items()
     }
+    checks["resume_mode"] = actual_mode == expected_mode
     checks["geometry"] = summary["geometry"] == baseline["case"]["geometry"]
     checks["inference_steps"] = (
         int(summary["surrogate"]["inference_steps"])
@@ -101,6 +116,7 @@ def main() -> int:
         "checks": checks,
         "observed": {
             **shapes,
+            "resume_mode": actual_mode,
             "surrogate_force_coefficients": {
                 name: float(summary["surrogate"][name]) for name in ("cl", "cd", "cm")
             },

@@ -82,23 +82,30 @@ For an existing HPC toolchain, follow the upstream MDO Lab installation guides
 and apply only this project's locked revisions and verification checks; see
 [the solver-stack guide](docs/solver_stack.md).
 
-After the model release is published, download and verify the paired model
-artifacts:
+Download the inference-only EMA checkpoint and its matching normalization
+statistics from the
+[Hugging Face model release](https://huggingface.co/xzztj/surrogate-newton-cfd-fsb-dit-airfoil-inference):
 
 ```bash
 scripts/download_checkpoint.sh artifacts
 ```
 
-Until the model release URL and license are finalized, set
-`SURROGATE_NEWTON_ASSET_BASE_URL` to the approved release-pair location. The
-downloader resumes a partial transfer, verifies size and SHA-256, and only then
-renames it to the final filename.
+The downloader reads an immutable Hugging Face revision from
+`model-manifest.json`, resumes a partial transfer, verifies size and SHA-256,
+and only then renames it to the final filename. Set
+`SURROGATE_NEWTON_ASSET_BASE_URL` only when using an approved mirror that has
+the same two filenames and bytes.
+
+The 362 MB checkpoint contains the EMA-applied model state used by inference.
+It intentionally excludes the optimizer, scheduler, training history, and
+non-EMA training weights from the 1.45 GB private resume checkpoint, so it
+cannot resume training.
 
 Run the lightweight structural check:
 
 ```bash
 python deployment/smoke_check.py --level runtime \
-  --checkpoint artifacts/fsb-dit-airfoil-2608.04400.pt \
+  --checkpoint artifacts/fsb-dit-airfoil-2608.04400-inference.pt \
   --stats artifacts/turbulent-scale-stats.json
 ```
 
@@ -107,15 +114,17 @@ matching normalization-statistics JSON:
 
 ```bash
 python deployment/run.py \
-  --checkpoint artifacts/fsb-dit-airfoil-2608.04400.pt \
+  --checkpoint artifacts/fsb-dit-airfoil-2608.04400-inference.pt \
   --stats artifacts/turbulent-scale-stats.json \
   --output-dir outputs/rae2822
 ```
 
 This launches the local surrogate service, builds the RAE2822 authority mesh,
 predicts a five-channel physical flow field, and runs terminal Newton
-correction through ADflow. Detailed prerequisites and outputs are documented in
-[deployment/README.md](deployment/README.md).
+correction through ADflow. Terminal correction has two modes: `ank_nk` is the
+default uninterrupted ADflow ANK-to-NK solve, while `repeated_nk` is the
+explicit cumulative Direct-NK controller. Detailed prerequisites and outputs
+are documented in [deployment/README.md](deployment/README.md).
 
 For internal interactive use, mount the optional external UIUC asset library
 and start the loopback Web application:
@@ -129,21 +138,28 @@ export DEMO_AIRFOIL_LIBRARY_ROOT=/path/to/demo-assets-uiuc-v1/uiuc
 
 See [the demo guide](demo/README.md) for configuration and SSH tunnelling.
 
-Compare a completed run with the sanitized aerolab3 baseline using:
+The included sanitized aerolab3 numerical baseline records `repeated_nk`.
+Reproduce that explicit mode and compare it using:
 
 ```bash
+python deployment/run.py \
+  --checkpoint artifacts/fsb-dit-airfoil-2608.04400-inference.pt \
+  --stats artifacts/turbulent-scale-stats.json \
+  --resume-mode repeated_nk \
+  --output-dir outputs/rae2822-repeated
 python deployment/compare_acceptance.py \
-  --result-dir outputs/rae2822 \
+  --result-dir outputs/rae2822-repeated \
   --baseline deployment/acceptance/rae2822-baseline.json
 ```
 
 ## Model artifacts and data
 
 Model weights, normalization statistics, and training data are deliberately
-kept outside the Git repository. The released checkpoint and statistics are
-recorded in `model-manifest.json` and verified by SHA-256 during download. A
-checkpoint must always be used with the configuration and statistics from the
-same model release.
+kept outside the Git repository and runtime image. The released checkpoint and
+statistics are recorded in `model-manifest.json` and verified by SHA-256 during
+download. Mount the verified artifact directory read-only at `/models` when
+running the container. A checkpoint must always be used with the configuration
+and statistics from the same model release.
 
 ## Citation
 

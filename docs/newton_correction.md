@@ -4,35 +4,57 @@
 ADflow. It records the mesh, flow conditions, model provenance, MPI layout,
 solver plan, injected field, and result paths in a canonical `ResumeCase`.
 
-## Terminal correction
+## Terminal correction modes
 
-For a final FSB field:
-
-```python
-from NK_resume import NKWorkPlan, SolverPreset, finalonly_plan
-
-plan = finalonly_plan(
-    "fsb",
-    work=NKWorkPlan.fixed(6, solver_preset=SolverPreset.NK),
-)
-```
-
-The fixed budget represents six consecutive one-cycle ADflow calls. It is not
-equivalent to one call with `nCycles=6`, and it should not be described as six
-linear Krylov iterations.
-
-An adaptive plan records cumulative budgets and a residual-ratio threshold:
+Terminal correction exposes two modes. `ank_nk` is the default: it makes one
+uninterrupted call with ADflow's production ANK-to-NK options and treats the
+configured work and wall time as independent ceilings. The standard fixed-AoA
+defaults are a residual target of `1e-8`, `NKSwitchTol=1e-4`,
+`max_work=2000`, and `time_limit_s=10`.
 
 ```python
+from NK_resume import NKWorkPlan, finalonly_plan
+
+plan = finalonly_plan("fsb")
+# Equivalent explicit form:
 plan = finalonly_plan(
     "fsb",
-    work=NKWorkPlan.adaptive(
-        range(1, 11),
-        threshold=1.0e-8,
-        solver_preset=SolverPreset.NK,
+    work=NKWorkPlan.ank_nk(
+        max_work=2000,
+        time_limit_s=10.0,
+        nk_switch_tolerance=1.0e-4,
     ),
 )
 ```
+
+`repeated_nk` is the explicit cumulative Direct-NK controller. Each schedule
+entry is a separate solver call budget; the controller can stop after a call
+when the residual-ratio threshold is met.
+
+```python
+plan = finalonly_plan(
+    "fsb",
+    work=NKWorkPlan.repeated_nk(
+        (6, 8, 10),
+        threshold=1.0e-8,
+    ),
+)
+```
+
+A cumulative budget is a solver-call contract, not a count of linear Krylov
+iterations. Results identify the selected `resume_mode` and report call count,
+requested work, approximate total nonlinear work, verified residuals, and the
+termination reason in `metrics.solver_work`. The repeated mode additionally
+records its per-call residual trajectory in `metrics.nk_residual_contract`.
+
+## Fixed-lift correction
+
+An `ank_nk` case with `FixedLiftContext` delegates angle-of-attack convergence
+to native `ADFLOW.solveCL`. Each flow solve defaults to a work ceiling of 1000,
+the driver may make at most 5 flow solves, and the complete fixed-lift case has
+a 30 s wall-time limit. `NKSwitchTol=1e-4` and `cl_tolerance=0.01` apply
+throughout. These limits are serialized with the case. The `repeated_nk`
+optimization path retains its explicit external AoA controller.
 
 ## Staged correction
 

@@ -88,10 +88,10 @@
           </div>
         </div>
         <div class="method-bar" aria-label="Method settings and mesh preparation">
-          <div class="method-bar-heading"><strong>Method settings</strong><span>Set the iterative budgets and NK stopping threshold, then prepare the shared mesh.</span></div>
+          <div class="method-bar-heading"><strong>Method settings</strong><span>Set the prediction steps and ANK→NK convergence target, then prepare the shared mesh.</span></div>
           <div class="method-setting-grid">
             <label class="horizontal-setting" for="surrogate-steps"><span>Surrogate steps<small>Default 5; 5–10 recommended</small></span><input id="surrogate-steps" type="number" min="1" max="20" step="1" value="5"></label>
-            <div class="horizontal-setting nk-setting"><span><strong>Maximum NK cycles</strong><small>6–15 cycles recommended. Stops early when residual L2 ratio ≤ 10<sup>−p</sup>; default p = 8.</small></span><div class="nk-setting-inputs"><label for="nk-cycles"><span>Max cycles</span><input id="nk-cycles" type="number" min="1" max="20" step="1" value="6"></label><label for="nk-stop-exponent"><span>Stop exponent p</span><input id="nk-stop-exponent" type="number" min="2" max="12" step="1" value="8"></label></div></div>
+            <div class="horizontal-setting nk-setting"><span><strong>ANK→NK convergence target</strong><small>Stops when residual L2 ratio ≤ 10<sup>−p</sup>; p is adjustable from 4 to 10 and defaults to 6. The server fixes the ADFLOW work ceiling at 1000 and wall-time limit at 10 s.</small></span><div class="nk-setting-inputs"><label for="nk-stop-exponent"><span>Residual exponent p</span><input id="nk-stop-exponent" type="number" min="4" max="10" step="1" value="6"></label></div></div>
             <div class="mesh-preparation"><button id="mesh-button" class="action-button" disabled>Generate mesh</button><div id="mesh-status" class="mesh-status">Mesh not generated.</div></div>
           </div>
           <p id="case-message" class="case-message" role="status" aria-live="polite">Preparing the local workspace.</p>
@@ -102,10 +102,10 @@
         <div class="section-heading"><span>2</span><div><h2 id="results-heading">Compare predictions</h2><p>Completed methods remain visible on common axes and colour scales.</p></div></div>
         <div class="stage-summary" aria-label="Available solution stages">
           <article id="stage-surrogate" class="stage-card active"><i></i><div><strong>Surrogate</strong><span id="surrogate-stage-detail">5 prediction steps</span></div><small class="stage-state">Ready</small></article>
-          <article id="stage-recovery" class="stage-card"><i></i><div><strong>Surrogate + NK</strong><span id="nk-stage-detail">Up to 6 cycles · stop at 10⁻⁸</span></div><small class="stage-state">Awaiting Surrogate</small></article>
+          <article id="stage-recovery" class="stage-card"><i></i><div><strong>Surrogate + ANK→NK</strong><span id="nk-stage-detail">Converge to 10⁻⁶ · fixed work ceiling 1000 · 10 s wall-time limit</span></div><small class="stage-state">Awaiting Surrogate</small></article>
           <article id="stage-reference" class="stage-card"><i></i><div><strong>ADflow</strong><span>Cold-start · up to 3000 cycles</span></div><small class="stage-state">Optional</small></article>
         </div>
-        <div class="solver-actions"><button id="predict-button" class="action-button surrogate-run" disabled>Run Surrogate</button><button id="recover-button" class="action-button nk-run" disabled>Run Surrogate + NK (max 6)</button><button id="reference-button" class="action-button adflow-run" disabled>Run cold-start ADflow</button></div>
+        <div class="solver-actions"><button id="predict-button" class="action-button surrogate-run" disabled>Run Surrogate</button><button id="recover-button" class="action-button nk-run" disabled>Run Surrogate + ANK→NK</button><button id="reference-button" class="action-button adflow-run" disabled>Run cold-start ADflow</button></div>
 
         <article class="result-panel cp-panel">
           <div class="result-heading"><div><h3>Surface pressure coefficient</h3><p>All methods share the same axes; ADflow uses a broad reference stroke, NK uses circles, and the Surrogate uses squares so coincident curves remain visible.</p></div><div id="cp-legend" class="plot-legend"></div></div>
@@ -114,7 +114,7 @@
 
         <article class="result-panel metric-panel">
           <div class="result-heading"><div><h3>Case metrics</h3><p>Forces and RANS-SA residual L2 ratio follow the formal evaluation modules; reference-error metrics appear after ADflow finishes.</p></div></div>
-          <div class="metric-table-wrap"><table class="comparison-table"><thead><tr><th>Metric</th><th>Surrogate</th><th>Surrogate + NK</th><th>ADflow</th></tr></thead><tbody id="comparison-body"></tbody></table></div>
+          <div class="metric-table-wrap"><table class="comparison-table"><thead><tr><th>Metric</th><th>Surrogate</th><th>Surrogate + ANK→NK</th><th>ADflow</th></tr></thead><tbody id="comparison-body"></tbody></table></div>
         </article>
 
         <article class="result-panel fields-panel">
@@ -128,7 +128,7 @@
           </div>
           <div class="field-grid">
             <figure class="field-item"><figcaption>Surrogate</figcaption><div><canvas id="field-surrogate" aria-label="Surrogate field"></canvas><p id="field-surrogate-empty" class="field-placeholder">Awaiting result</p></div></figure>
-            <figure class="field-item"><figcaption>Surrogate + NK</figcaption><div><canvas id="field-recovery" aria-label="NK-corrected field"></canvas><p id="field-recovery-empty" class="field-placeholder">Awaiting result</p></div></figure>
+            <figure class="field-item"><figcaption>Surrogate + ANK→NK</figcaption><div><canvas id="field-recovery" aria-label="ANK-to-NK-corrected field"></canvas><p id="field-recovery-empty" class="field-placeholder">Awaiting result</p></div></figure>
             <figure class="field-item"><figcaption>ADflow</figcaption><div><canvas id="field-reference" aria-label="ADflow field"></canvas><p id="field-reference-empty" class="field-placeholder">Awaiting result</p></div></figure>
           </div>
           <div id="error-section" class="error-section" hidden>
@@ -141,7 +141,7 @@
             </div>
             <div class="error-grid">
               <figure class="field-item"><figcaption>Surrogate error <span id="surrogate-error-mse"></span></figcaption><div><canvas id="error-surrogate" aria-label="Surrogate absolute field error"></canvas></div></figure>
-              <figure class="field-item"><figcaption>Surrogate + NK error <span id="recovery-error-mse"></span></figcaption><div><canvas id="error-recovery" aria-label="NK absolute field error"></canvas></div></figure>
+              <figure class="field-item"><figcaption>Surrogate + ANK→NK error <span id="recovery-error-mse"></span></figcaption><div><canvas id="error-recovery" aria-label="ANK-to-NK absolute field error"></canvas></div></figure>
             </div>
           </div>
         </article>

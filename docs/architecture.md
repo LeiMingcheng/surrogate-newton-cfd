@@ -30,6 +30,12 @@ airfoil geometry + Mach/AoA/Re
 - `optimization` reuses these public boundaries; it does not implement another
   mesh, surrogate, or Newton runtime.
 
+Terminal resume has two explicit solver modes. `ank_nk` is the default and
+runs one uninterrupted production ANK-to-NK call. `repeated_nk` runs a stated
+cumulative Direct-NK schedule and can stop after any scheduled call when its
+residual threshold is met. Both modes use the same case, payload, MPI, and
+result contracts.
+
 ## Two-dimensional field contract
 
 The current model grid has 84 radial cells and 304 circumferential cells:

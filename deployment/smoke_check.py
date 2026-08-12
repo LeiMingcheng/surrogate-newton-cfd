@@ -146,11 +146,11 @@ def _result_checks(
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
     result = json.loads(result_paths[0].read_text(encoding="utf-8"))
     stage = result["stages"][-1]
-    contract = stage["metrics"]["nk_residual_contract"]
+    solver_work = stage["metrics"]["solver_work"]
     forces = stage["metrics"]["force_coefficients"]
-    pre_residual = float(contract["pre_nk_totalr"])
-    post_residual = float(contract["post_nk_totalr"])
-    final_ratio = float(contract["post_over_reference_totalr0"])
+    pre_residual = float(solver_work["initial_solver_l2"])
+    post_residual = float(solver_work["final_solver_l2"])
+    final_ratio = float(solver_work["solver_l2_ratio"])
     with np.load(state_path) as state:
         field_shape = list(state["fields"].shape)
         center_shape = list(state["coords"].shape)
@@ -168,6 +168,7 @@ def _result_checks(
             },
             "projection_schema": result["schema_version"] == "projection_result_v1",
             "projection_status": result["status"] == "ok" and stage["status"] == "ok",
+            "resume_mode": solver_work["resume_mode"] in {"ank_nk", "repeated_nk"},
             "field_shape": field_shape == [5, 84, 304]
             and summary["surrogate"]["field_shape"] == field_shape,
             "mesh_shape": center_shape == [4, 84, 304]
@@ -176,7 +177,8 @@ def _result_checks(
                 math.isfinite(value) for value in (pre_residual, post_residual, final_ratio)
             ),
             "newton_reduces_residual": 0.0 < post_residual < pre_residual,
-            "newton_meets_threshold": final_ratio <= residual_threshold,
+            "newton_meets_threshold": final_ratio <= residual_threshold
+            and solver_work["termination"] == "converged",
             "finite_force_coefficients": all(
                 math.isfinite(float(forces[name])) for name in ("cl", "cd", "cm")
             ),
@@ -189,6 +191,10 @@ def _result_checks(
         "pre_nk_totalr": pre_residual,
         "post_nk_totalr": post_residual,
         "post_over_reference_totalr0": final_ratio,
+        "resume_mode": solver_work["resume_mode"],
+        "solver_call_count": int(solver_work["solver_call_count"]),
+        "approx_total_its": float(solver_work["approx_total_its"]),
+        "termination": solver_work["termination"],
         "force_coefficients": {name: float(forces[name]) for name in ("cl", "cd", "cm")},
     }
     return checks, details

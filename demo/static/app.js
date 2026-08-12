@@ -1,7 +1,7 @@
 "use strict";
 
 const COLORS = { surrogate: "#c66a2b", recovery: "#326a9a", reference: "#253543" };
-const STAGE_LABELS = { surrogate: "Surrogate", recovery: "Surrogate + NK", reference: "ADflow" };
+const STAGE_LABELS = { surrogate: "Surrogate", recovery: "Surrogate + ANK→NK", reference: "ADflow" };
 const NS = "http://www.w3.org/2000/svg";
 const DEFAULT_REYNOLDS_PER_MACH = 22132436.863567192;
 const FIELD_SMOOTHING_PX = 0.7;
@@ -385,11 +385,10 @@ function residualThresholdLabel(exponent) {
 
 function syncMethodLabels() {
   const surrogateSteps = Number($("#surrogate-steps").value);
-  const nkCycles = Number($("#nk-cycles").value);
   const stopExponent = Number($("#nk-stop-exponent").value);
   $("#surrogate-stage-detail").textContent = `${surrogateSteps} prediction steps`;
-  $("#nk-stage-detail").textContent = `Up to ${nkCycles} cycles · stop at ${residualThresholdLabel(stopExponent)}`;
-  $("#recover-button").textContent = `Run Surrogate + NK (max ${nkCycles})`;
+  $("#nk-stage-detail").textContent = `Converge to ${residualThresholdLabel(stopExponent)} · fixed work ceiling 1000`;
+  $("#recover-button").textContent = "Run Surrogate + ANK→NK";
 }
 
 function syncCase(payload) {
@@ -400,8 +399,8 @@ function syncCase(payload) {
   setStageCard("surrogate", payload.stage ? "Complete" : "Ready", payload.stage ? "complete" : "active");
   const recoveryState = payload.recovery
     ? (payload.recovery.converged
-      ? `Converged in ${payload.recovery.executed_cycles} cycles`
-      : `Reached ${payload.recovery.cycle_limit}-cycle limit`)
+      ? `Converged · work ${payload.recovery.approx_total_its}`
+      : `${payload.recovery.termination} · work ${payload.recovery.approx_total_its}`)
     : "Ready to run";
   setStageCard("recovery", recoveryState, payload.recovery ? "complete" : "active");
   setStageCard("reference", payload.reference ? (payload.reference.converged ? "Converged" : "Solve complete") : "Optional", payload.reference ? "complete" : "");
@@ -596,7 +595,8 @@ function renderMetrics() {
     ["Drag coefficient, CD", (key, stage) => formatNumber(stage?.forces?.cd, 6)],
     ["Moment coefficient, CM", (key, stage) => formatNumber(stage?.forces?.cm, 5)],
     ["Residual L2 ratio", (key, stage) => formatNumber(stage?.residual?.final, 4)],
-    ["NK cycles executed / limit", (key, stage) => key === "recovery" && stage ? `${stage.executed_cycles} / ${stage.cycle_limit}` : "—"],
+    ["ADFLOW work / ceiling", (key, stage) => key === "recovery" && stage ? `${formatNumber(stage.approx_total_its, 0)} / ${stage.max_work}` : "—"],
+    ["ADFLOW wall-time limit", (key, stage) => key === "recovery" && stage?.time_limit_s ? `${formatNumber(stage.time_limit_s, 0)} s` : "—"],
     ["Full-field MSE vs ADflow", (key, stage) => formatNumber(stage?.reference_mse, 6)],
     ["Force MAE vs ADflow (10|ΔCD| + |ΔCL|)", (key, stage) => formatNumber(stage?.force_mae_reference, 6)],
     ["Model / solver wall time", (key, stage) => { const seconds = stageWallTime(key, stage); return seconds === null || seconds === undefined ? "—" : `${formatNumber(seconds, 3)} s`; }],
@@ -787,15 +787,15 @@ async function runPrediction() {
 }
 
 async function runRecovery() {
-  if (!state.case) return; const cycles = Number($("#nk-cycles").value); const residualExponent = Number($("#nk-stop-exponent").value); const thresholdLabel = residualThresholdLabel(residualExponent);
-  setBusy(true, `Running up to ${cycles} Newton–Krylov correction cycles; stopping automatically at residual L2 ratio ${thresholdLabel}…`); setStageCard("recovery", "Running", "running");
+  if (!state.case) return; const residualExponent = Number($("#nk-stop-exponent").value); const thresholdLabel = residualThresholdLabel(residualExponent);
+  setBusy(true, `Running one ANK→NK continuation to residual L2 ratio ${thresholdLabel} with a fixed work ceiling…`); setStageCard("recovery", "Running", "running");
   try {
-    const payload = await runQueuedJob("recover", { case_id: state.case.case_id, cycles, residual_exponent: residualExponent });
+    const payload = await runQueuedJob("recover", { case_id: state.case.case_id, residual_exponent: residualExponent });
     syncCase(payload);
     const recovery = payload.recovery;
     setMessage(recovery.converged
-      ? `Surrogate + NK converged in ${recovery.executed_cycles} of at most ${recovery.cycle_limit} cycles (MPI ${state.mpiRanks}).`
-      : `Surrogate + NK reached the ${recovery.cycle_limit}-cycle limit without meeting residual L2 ratio ${thresholdLabel} (MPI ${state.mpiRanks}).`);
+      ? `Surrogate + ANK→NK converged using ${recovery.approx_total_its} ADFLOW work units (MPI ${state.mpiRanks}).`
+      : `Surrogate + ANK→NK stopped with ${recovery.termination} at ${recovery.approx_total_its} / ${recovery.max_work} work units; target ${thresholdLabel} (MPI ${state.mpiRanks}).`);
   } catch (error) {
     setStageCard("recovery", error.jobState === "cancelled" ? "Awaiting request" : "Failed", "active");
     setMessage(error.message, error.jobState !== "cancelled");
@@ -847,7 +847,6 @@ function wireEvents() {
   });
   bindRange("#mach-range", "#mach", syncReferenceState); bindRange("#aoa-range", "#aoa");
   $("#surrogate-steps").addEventListener("input", () => { syncMethodLabels(); clearCase(); });
-  $("#nk-cycles").addEventListener("input", syncMethodLabels);
   $("#nk-stop-exponent").addEventListener("input", syncMethodLabels);
   $("#field-channel").addEventListener("change", renderFields);
   ["#field-scale-min", "#field-scale-max", "#error-scale-min", "#error-scale-max"].forEach((selector) => $(selector).addEventListener("input", renderFields));

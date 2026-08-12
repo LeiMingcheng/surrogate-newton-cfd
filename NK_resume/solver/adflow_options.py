@@ -30,6 +30,7 @@ class ADflowOptionRequest:
     options_version: int = 2
     l2conv: float = 1.0e-8
     cycles: int = 1
+    nk_switch_tolerance: float = 1.0e-4
     solver_preset: SolverPreset | str = SolverPreset.NK
     turbulence_model: str = "SA"
     print_iterations: bool = False
@@ -39,6 +40,7 @@ class ADflowOptionRequest:
         options_version = int(self.options_version)
         l2conv = float(self.l2conv)
         cycles = int(self.cycles)
+        nk_switch_tolerance = float(self.nk_switch_tolerance)
         try:
             preset = SolverPreset(self.solver_preset)
         except ValueError as exc:
@@ -49,11 +51,14 @@ class ADflowOptionRequest:
             raise ContractError("ADflowOptionRequest.l2conv must be positive")
         if cycles < 0:
             raise ContractError("ADflowOptionRequest.cycles must be non-negative")
+        if nk_switch_tolerance <= 0.0:
+            raise ContractError("ADflowOptionRequest.nk_switch_tolerance must be positive")
         object.__setattr__(self, "cgns_path", _path_text(self.cgns_path))
         object.__setattr__(self, "output_dir", _path_text(self.output_dir))
         object.__setattr__(self, "options_version", options_version)
         object.__setattr__(self, "l2conv", l2conv)
         object.__setattr__(self, "cycles", cycles)
+        object.__setattr__(self, "nk_switch_tolerance", nk_switch_tolerance)
         object.__setattr__(self, "solver_preset", preset)
         object.__setattr__(self, "turbulence_model", str(self.turbulence_model))
         object.__setattr__(self, "print_iterations", bool(self.print_iterations))
@@ -78,7 +83,7 @@ def _base_adflow_options(request: ADflowOptionRequest) -> dict[str, Any]:
         "ANKStepFactor": 0.5,
         "ANKMaxIter": 40,
         "useNKSolver": True,
-        "NKSwitchTol": 1.0e-5,
+        "NKSwitchTol": request.nk_switch_tolerance,
         "NKADPC": True,
         "NKInnerPreconIts": 2,
         "NKJacobianLag": 3,
@@ -217,6 +222,7 @@ def build_adflow_options_for_stage(
             options_version=options_version,
             l2conv=l2conv,
             cycles=cycles,
+            nk_switch_tolerance=stage.work.nk_switch_tolerance,
             solver_preset=stage.work.solver_preset,
             print_iterations=print_iterations,
             turbulence_model=turbulence_model,

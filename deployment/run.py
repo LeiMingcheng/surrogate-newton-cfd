@@ -23,7 +23,6 @@ from data.common.flow_conditions import (
 )
 from NK_resume import (
     NKWorkPlan,
-    SolverPreset,
     build_fsb_case,
     create_pipeline,
     finalonly_plan,
@@ -223,6 +222,26 @@ def _surrogate_prediction(
     return flow_conditions, fields, surrogate_summary
 
 
+def _resume_work_plan(
+    newton: dict[str, Any],
+    resume_mode: str | None = None,
+) -> NKWorkPlan:
+    selected_mode = str(resume_mode or newton["resume_mode"])
+    if selected_mode == "ank_nk":
+        return NKWorkPlan.ank_nk(
+            max_work=int(newton["max_work"]),
+            time_limit_s=float(newton["time_limit_s"]),
+            nk_switch_tolerance=float(newton["nk_switch_tolerance"]),
+        )
+    if selected_mode == "repeated_nk":
+        return NKWorkPlan.repeated_nk(
+            newton["repeated_nk_cycles"],
+            threshold=float(newton["residual_ratio"]),
+            name="terminal_recovery",
+        )
+    raise ValueError(f"Unsupported newton.resume_mode: {selected_mode}")
+
+
 def _correct_field(
     config: dict[str, Any],
     *,
@@ -233,16 +252,12 @@ def _correct_field(
     checkpoint: Path,
     stats: Path,
     output_dir: Path,
+    resume_mode: str | None = None,
 ) -> dict[str, Any]:
     newton = config["newton"]
     plan = finalonly_plan(
         "fsb",
-        work=NKWorkPlan.adaptive(
-            range(1, int(newton["max_cycles"]) + 1),
-            threshold=float(newton["residual_ratio"]),
-            name="terminal_recovery",
-            solver_preset=SolverPreset.NK,
-        ),
+        work=_resume_work_plan(newton, resume_mode),
     )
     cgns_path = Path(str(prepared.metadata["authority_cgns_path"]))
     case = build_fsb_case(
@@ -295,6 +310,7 @@ def main() -> int:
     parser.add_argument("--stats", required=True)
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--adflow-root")
+    parser.add_argument("--resume-mode", choices=("ank_nk", "repeated_nk"))
     parser.add_argument("--surrogate-only", action="store_true")
     args = parser.parse_args()
 
@@ -367,6 +383,7 @@ def main() -> int:
                 checkpoint=checkpoint,
                 stats=stats,
                 output_dir=output_dir,
+                resume_mode=args.resume_mode,
             )
         _write_json(output_dir / "summary.json", summary)
         print(json.dumps(summary, indent=2, sort_keys=True))

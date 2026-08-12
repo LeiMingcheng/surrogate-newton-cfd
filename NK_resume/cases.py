@@ -9,6 +9,7 @@ from .exceptions import ContractError
 from .plans import PredictorKind
 from .schema import (
     ArrayLike,
+    FixedLiftContext,
     GeometryContext,
     GroundTruth,
     ModelInputs,
@@ -84,6 +85,7 @@ def build_resume_case(
     mpi_launcher: str = "auto",
     mpi_omp_threads: int = 1,
     geometry_bundle_path: str | Path = "",
+    fixed_lift: FixedLiftContext | Mapping[str, Any] | None = None,
     ground_truth_field: ArrayLike | None = None,
     coords_center: ArrayLike | None = None,
     coords_vertex: ArrayLike | None = None,
@@ -134,6 +136,13 @@ def build_resume_case(
             mpi_launcher=str(mpi_launcher),
             mpi_omp_threads=mpi_omp_threads,
             geometry_bundle_path=_path_text(geometry_bundle_path),
+            fixed_lift=(
+                None
+                if fixed_lift is None
+                else fixed_lift
+                if isinstance(fixed_lift, FixedLiftContext)
+                else FixedLiftContext(**dict(fixed_lift))
+            ),
             metadata=_metadata(solver_metadata),
         ),
         ground_truth=GroundTruth(

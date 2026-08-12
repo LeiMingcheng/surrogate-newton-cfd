@@ -271,6 +271,7 @@ def _solver_context_payload(case: ResumeCase) -> dict[str, Any]:
         "mpi_launcher": solver.mpi_launcher,
         "mpi_omp_threads": solver.mpi_omp_threads,
         "geometry_bundle_path": solver.geometry_bundle_path,
+        "fixed_lift": None if solver.fixed_lift is None else solver.fixed_lift.to_dict(),
         "metadata": _metadata(solver.metadata),
     }
 
@@ -546,6 +547,7 @@ def resume_case_from_payload(path: str | Path) -> ResumeCase:
             mpi_launcher=str(solver.get("mpi_launcher") or "auto"),
             mpi_omp_threads=int(solver.get("mpi_omp_threads") or 1),
             geometry_bundle_path=geometry_bundle_path,
+            fixed_lift=solver.get("fixed_lift"),
             metadata=dict(solver.get("metadata") or {}),
         ),
         ground_truth=GroundTruth(

@@ -1,11 +1,22 @@
 {
   "schema_version": 1,
-  "release": "model-2608.04400",
+  "release": "model-2608.04400-inference-v1",
+  "license": "BSD-3-Clause",
   "paper": "https://arxiv.org/abs/2608.04400",
+  "hosting": {
+    "provider": "huggingface",
+    "repository": "xzztj/surrogate-newton-cfd-fsb-dit-airfoil-inference",
+    "revision": "31ffab13a6ad1f95f32c79615e5213fe6c38023e",
+    "base_url": "https://huggingface.co/xzztj/surrogate-newton-cfd-fsb-dit-airfoil-inference/resolve/31ffab13a6ad1f95f32c79615e5213fe6c38023e"
+  },
   "model": {
-    "filename": "fsb-dit-airfoil-2608.04400.pt",
-    "sha256": "0b8be8a31cc972fb817f46369c1d39efd39b703f307ba28eb85be388c7b2d942",
-    "size_bytes": 1448838994,
+    "filename": "fsb-dit-airfoil-2608.04400-inference.pt",
+    "format": "surrogate-newton-inference-v1",
+    "checkpoint_type": "inference_only",
+    "weights": "ema",
+    "resume_training": false,
+    "sha256": "4291eb87bd9771e5619dc9745ee4268b2c1ca47d17c3c4e692f0fa5f1876447c",
+    "size_bytes": 362194924,
     "family": "fsb",
     "backbone": "dit",
     "field_channels": 5,
@@ -14,8 +25,8 @@
     "flow_condition_dimensions": 3,
     "spatial_shape": [88, 304],
     "config": "surrogate/configs/training/fsb_dit.yaml",
-    "config_sha256": "f4cebc6a20760c47e748aa237bb745212c8e39a3b439b89e4c8b0069627606da",
-    "private_training_record_sha256": "e0b0b66c8aae7958e519e4cf3e34534be0fdaeb133d6105b6e00c31316077a62"
+    "config_sha256": "c1a3fc8df5156dc9e5bc8eba6f8566ad8efe679cd1d458bda25af58e6196c9c8",
+    "source_training_checkpoint_sha256": "0b8be8a31cc972fb817f46369c1d39efd39b703f307ba28eb85be388c7b2d942"
   },
   "normalization_statistics": {
     "filename": "turbulent-scale-stats.json",
@@ -24,8 +35,9 @@
     "version": "turbulent-scale-v1.0"
   },
   "notes": [
-    "The public model config changes only experiment labels and filesystem paths from the frozen training record.",
+    "The inference checkpoint contains the EMA-applied model state only and cannot resume training.",
+    "It was verified tensor-for-tensor against loading the source training checkpoint with use_ema=True.",
     "Checkpoint and normalization statistics must be used as one release pair.",
-    "Training datasets and the flow-perceptual encoder checkpoint are not part of this release."
+    "The resume-training checkpoint, training datasets, and flow-perceptual encoder checkpoint are not part of this release."
   ]
 }

@@ -141,7 +141,7 @@ class JobSchedulerTests(unittest.TestCase):
         jobs = [
             scheduler.submit(
                 "recover",
-                {"case_id": "case_shared", "cycles": 2},
+                {"case_id": "case_shared"},
                 client_id="nk-client",
             ),
             scheduler.submit(
@@ -172,7 +172,7 @@ class JobSchedulerTests(unittest.TestCase):
         jobs.extend(
             scheduler.submit(
                 "recover",
-                {"case_id": f"case_nk_{index}", "cycles": 2},
+                {"case_id": f"case_nk_{index}"},
                 client_id=f"nk-client-{index}",
             )
             for index in range(4)
@@ -321,7 +321,8 @@ class JobSchedulerTests(unittest.TestCase):
         invalid_payloads = [
             ("mesh", {"geometry27": [0.0] * 26}),
             ("predict", {"geometry27": GEOMETRY27, "mach": 1.2, "aoa": 0}),
-            ("recover", {"case_id": "../case", "cycles": 6}),
+            ("recover", {"case_id": "../case"}),
+            ("recover", {"case_id": "case_ok", "cycles": 6}),
             ("reference", {"case_id": "case_ok", "max_cycles": 24}),
             ("reference", {"case_id": "case_ok", "max_cycles": 3001}),
         ]

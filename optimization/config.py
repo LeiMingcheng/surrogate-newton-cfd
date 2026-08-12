@@ -104,9 +104,14 @@ class NKConfig:
     coupling: str = "sync"
     ranks_per_case: int = 8
     pool_count: int = 3
-    adaptive_cycles: tuple[int, ...] = (6, 8, 10)
+    resume_mode: str = "ank_nk"
+    max_work_per_flow_solve: int = 1000
+    max_aoa_solves: int = 5
+    total_time_limit_s: float = 30.0
+    repeated_nk_cycles: tuple[int, ...] = (6, 8, 10)
     residual_tolerance: float = 1.0e-8
-    cl_tolerance: float = 6.0e-3
+    nk_switch_tolerance: float = 1.0e-4
+    cl_tolerance: float = 1.0e-2
     max_corrections: int = 3
     initial_cl_alpha: float = 0.1
     max_aoa_step: float = 2.0
@@ -126,16 +131,37 @@ class NKConfig:
             raise ValueError("nk.selection must be 'all' or 'topk'")
         if self.coupling not in {"sync", "async"}:
             raise ValueError("nk.coupling must be 'sync' or 'async'")
+        if self.resume_mode not in {"ank_nk", "repeated_nk"}:
+            raise ValueError("nk.resume_mode must be 'ank_nk' or 'repeated_nk'")
         if self.top_k <= 0:
             raise ValueError("nk.top_k must be positive")
-        if not self.adaptive_cycles:
-            raise ValueError("nk.adaptive_cycles must not be empty")
-        if self.ranks_per_case <= 0 or self.pool_count <= 0:
-            raise ValueError("nk ranks_per_case and pool_count must be positive")
-        if min(self.adaptive_cycles) <= 0:
-            raise ValueError("nk.adaptive_cycles values must be positive")
-        if self.residual_tolerance <= 0.0 or self.cl_tolerance <= 0.0:
+        if not self.repeated_nk_cycles:
+            raise ValueError("nk.repeated_nk_cycles must not be empty")
+        if (
+            self.ranks_per_case <= 0
+            or self.pool_count <= 0
+            or self.max_work_per_flow_solve <= 0
+            or self.max_aoa_solves <= 0
+        ):
+            raise ValueError(
+                "nk ranks_per_case, pool_count, max_work_per_flow_solve, and "
+                "max_aoa_solves must be positive"
+            )
+        if min(self.repeated_nk_cycles) <= 0:
+            raise ValueError("nk.repeated_nk_cycles values must be positive")
+        if (
+            tuple(sorted(self.repeated_nk_cycles)) != self.repeated_nk_cycles
+            or len(set(self.repeated_nk_cycles)) != len(self.repeated_nk_cycles)
+        ):
+            raise ValueError("nk.repeated_nk_cycles must be strictly increasing")
+        if (
+            self.residual_tolerance <= 0.0
+            or self.nk_switch_tolerance <= 0.0
+            or self.cl_tolerance <= 0.0
+        ):
             raise ValueError("nk tolerances must be positive")
+        if self.total_time_limit_s <= 0.0:
+            raise ValueError("nk.total_time_limit_s must be positive")
         if (
             self.max_corrections < 0
             or self.max_aoa_step <= 0.0
@@ -284,6 +310,13 @@ def load_optimization_config(path: str | Path) -> OptimizationConfig:
     serving = _section(payload, "serving")
     cfd = _section(payload, "cfd")
     nk = _section(payload, "nk")
+    legacy_repeated_nk_cycles = nk.pop("adaptive_cycles", None)
+    if legacy_repeated_nk_cycles is not None and "resume_mode" not in nk:
+        nk["resume_mode"] = "repeated_nk"
+    repeated_nk_cycles = nk.pop(
+        "repeated_nk_cycles",
+        legacy_repeated_nk_cycles or (6, 8, 10),
+    )
     objective = _section(payload, "objective")
     optimizer = _section(payload, "optimizer")
     initial_population = str(optimizer.get("initial_population", ""))
@@ -309,8 +342,8 @@ def load_optimization_config(path: str | Path) -> OptimizationConfig:
         serving=ServingConfig(**serving),
         cfd=CFDConfig(**cfd),
         nk=NKConfig(
-            adaptive_cycles=tuple(
-                int(value) for value in nk.pop("adaptive_cycles", (6, 8, 10))
+            repeated_nk_cycles=tuple(
+                int(value) for value in repeated_nk_cycles
             ),
             **nk,
         ),

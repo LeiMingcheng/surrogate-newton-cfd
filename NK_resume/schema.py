@@ -37,6 +37,44 @@ def _path_text(value: str | Path | None) -> str:
 
 
 @dataclass(frozen=True)
+class FixedLiftContext:
+    """Native ADFLOW solveCL controls for one resume case."""
+
+    target_cl: float
+    cl_tolerance: float
+    max_aoa_solves: int
+    cl_alpha_guess: float = 0.1
+    delta_alpha: float = 0.5
+    total_time_limit_s: float = 30.0
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "target_cl", float(self.target_cl))
+        object.__setattr__(self, "cl_tolerance", float(self.cl_tolerance))
+        object.__setattr__(self, "max_aoa_solves", int(self.max_aoa_solves))
+        object.__setattr__(self, "cl_alpha_guess", float(self.cl_alpha_guess))
+        object.__setattr__(self, "delta_alpha", float(self.delta_alpha))
+        object.__setattr__(self, "total_time_limit_s", float(self.total_time_limit_s))
+        if self.cl_tolerance <= 0.0:
+            raise ContractError("FixedLiftContext.cl_tolerance must be positive")
+        if self.max_aoa_solves <= 0:
+            raise ContractError("FixedLiftContext.max_aoa_solves must be positive")
+        if self.cl_alpha_guess == 0.0 or self.delta_alpha == 0.0:
+            raise ContractError("FixedLiftContext slope guess and alpha delta must be nonzero")
+        if self.total_time_limit_s <= 0.0:
+            raise ContractError("FixedLiftContext.total_time_limit_s must be positive")
+
+    def to_dict(self) -> JsonDict:
+        return {
+            "target_cl": self.target_cl,
+            "cl_tolerance": self.cl_tolerance,
+            "max_aoa_solves": self.max_aoa_solves,
+            "cl_alpha_guess": self.cl_alpha_guess,
+            "delta_alpha": self.delta_alpha,
+            "total_time_limit_s": self.total_time_limit_s,
+        }
+
+
+@dataclass(frozen=True)
 class ModelInputs:
     """Surrogate-side inputs needed to reproduce or describe a prediction."""
 
@@ -79,6 +117,7 @@ class SolverContext:
     mpi_launcher: str = "auto"
     mpi_omp_threads: int = 1
     geometry_bundle_path: str = ""
+    fixed_lift: FixedLiftContext | None = None
     metadata: JsonDict = dc_field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -95,6 +134,8 @@ class SolverContext:
         object.__setattr__(self, "ranks_per_case", int(self.ranks_per_case))
         object.__setattr__(self, "mpi_omp_threads", int(self.mpi_omp_threads))
         object.__setattr__(self, "geometry_bundle_path", _path_text(self.geometry_bundle_path))
+        if self.fixed_lift is not None and not isinstance(self.fixed_lift, FixedLiftContext):
+            object.__setattr__(self, "fixed_lift", FixedLiftContext(**dict(self.fixed_lift)))
         object.__setattr__(self, "metadata", _as_metadata(self.metadata))
         if self.wall_layers is not None and int(self.wall_layers) <= 0:
             raise ContractError("SolverContext.wall_layers must be positive when set")

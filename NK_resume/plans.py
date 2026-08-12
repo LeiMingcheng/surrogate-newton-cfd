@@ -5,7 +5,7 @@ There are two separate layers:
 - `ResumePlan.kind` describes the surrogate/NK interaction form
   (`finalonly` or `alternating`).
 - `NKWorkPlan` describes how one solver correction stage runs internally
-  (`fixed` or `adaptive`).
+  and exposes the terminal `ank_nk` and `repeated_nk` modes.
 """
 
 from __future__ import annotations
@@ -30,11 +30,20 @@ class PredictorKind(str, Enum):
 
 
 class SolverPreset(str, Enum):
+    """Low-level ADflow option bundles kept for manifest compatibility."""
+
     NONE = "none"
     NK = "nk"
     ANK = "ank"
     PROD = "prod"
     PSEUDO = "pseudo"
+
+
+class ResumeMode(str, Enum):
+    """User-facing terminal-resume algorithms."""
+
+    ANK_NK = "ank_nk"
+    REPEATED_NK = "repeated_nk"
 
 
 class CyclePolicy(str, Enum):
@@ -91,6 +100,8 @@ class NKWorkPlan:
     solver_preset: SolverPreset = SolverPreset.NK
     fixed_cycles: int = 0
     adaptive_schedule: AdaptiveSchedule | None = None
+    time_limit_s: float | None = None
+    nk_switch_tolerance: float = 1.0e-4
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -99,6 +110,16 @@ class NKWorkPlan:
         object.__setattr__(self, "cycle_policy", policy)
         object.__setattr__(self, "solver_preset", solver)
         object.__setattr__(self, "fixed_cycles", int(self.fixed_cycles))
+        object.__setattr__(
+            self,
+            "time_limit_s",
+            None if self.time_limit_s is None else float(self.time_limit_s),
+        )
+        object.__setattr__(
+            self,
+            "nk_switch_tolerance",
+            float(self.nk_switch_tolerance),
+        )
         object.__setattr__(self, "metadata", {str(k): v for k, v in dict(self.metadata).items()})
 
         if policy == CyclePolicy.FIXED:
@@ -111,6 +132,10 @@ class NKWorkPlan:
                 raise ContractError("adaptive NK work requires an AdaptiveSchedule")
             if self.fixed_cycles:
                 raise ContractError("adaptive NK work cannot also define fixed cycles")
+        if self.time_limit_s is not None and self.time_limit_s <= 0.0:
+            raise ContractError("NKWorkPlan.time_limit_s must be positive when set")
+        if self.nk_switch_tolerance <= 0.0:
+            raise ContractError("NKWorkPlan.nk_switch_tolerance must be positive")
 
     @classmethod
     def fixed(
@@ -124,6 +149,65 @@ class NKWorkPlan:
             solver_preset=SolverPreset(solver_preset),
             fixed_cycles=int(cycles),
         )
+
+    @classmethod
+    def ank_nk(
+        cls,
+        max_work: int = 2000,
+        *,
+        time_limit_s: float = 10.0,
+        nk_switch_tolerance: float = 1.0e-4,
+    ) -> "NKWorkPlan":
+        """Run one uninterrupted production ANK-to-NK solver call."""
+
+        return cls(
+            cycle_policy=CyclePolicy.FIXED,
+            solver_preset=SolverPreset.PROD,
+            fixed_cycles=int(max_work),
+            time_limit_s=float(time_limit_s),
+            nk_switch_tolerance=float(nk_switch_tolerance),
+            metadata={"resume_mode": ResumeMode.ANK_NK.value},
+        )
+
+    @classmethod
+    def repeated_nk(
+        cls,
+        cumulative_calls: Iterable[int] = (6, 8, 10),
+        *,
+        threshold: float = 1.0e-8,
+        name: str = "repeated_nk",
+    ) -> "NKWorkPlan":
+        """Run the repeated Direct-NK controller explicitly."""
+
+        cycle_tuple = _positive_int_tuple(cumulative_calls, name="cumulative_calls")
+        return cls(
+            cycle_policy=CyclePolicy.ADAPTIVE,
+            solver_preset=SolverPreset.NK,
+            adaptive_schedule=AdaptiveSchedule(
+                cumulative_cycles=cycle_tuple,
+                thresholds=tuple(float(threshold) for _ in cycle_tuple),
+                name=name,
+            ),
+            metadata={"resume_mode": ResumeMode.REPEATED_NK.value},
+        )
+
+    @property
+    def resume_mode(self) -> ResumeMode | None:
+        """Return the public algorithm name for terminal resume presets."""
+
+        if self.solver_preset == SolverPreset.PROD:
+            return ResumeMode.ANK_NK
+        if self.solver_preset == SolverPreset.NK:
+            return ResumeMode.REPEATED_NK
+        return None
+
+    @property
+    def max_work(self) -> int | None:
+        """Return the one-call work ceiling for the ANK-to-NK mode."""
+
+        if self.resume_mode == ResumeMode.ANK_NK:
+            return int(self.fixed_cycles)
+        return None
 
     @classmethod
     def adaptive(
@@ -148,8 +232,11 @@ class NKWorkPlan:
     def to_dict(self) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "solver_preset": self.solver_preset.value,
+            "resume_mode": None if self.resume_mode is None else self.resume_mode.value,
             "cycle_policy": self.cycle_policy.value,
             "fixed_cycles": self.fixed_cycles,
+            "time_limit_s": self.time_limit_s,
+            "nk_switch_tolerance": self.nk_switch_tolerance,
             "metadata": dict(self.metadata),
         }
         if self.adaptive_schedule is not None:
@@ -239,11 +326,23 @@ def finalonly_plan(
     fixed_cycles: int | None = None,
     adaptive_cycles: Iterable[int] = (6, 8, 10),
     adaptive_threshold: float = 1.0e-8,
-    solver_preset: SolverPreset | str = SolverPreset.NK,
+    solver_preset: SolverPreset | str | None = None,
+    max_work: int = 2000,
+    time_limit_s: float = 10.0,
+    nk_switch_tolerance: float = 1.0e-4,
 ) -> ResumePlan:
     if work is None:
         if fixed_cycles is not None:
-            work = NKWorkPlan.fixed(fixed_cycles, solver_preset=solver_preset)
+            work = NKWorkPlan.fixed(
+                fixed_cycles,
+                solver_preset=SolverPreset.NK if solver_preset is None else solver_preset,
+            )
+        elif solver_preset is None or SolverPreset(solver_preset) == SolverPreset.PROD:
+            work = NKWorkPlan.ank_nk(
+                max_work=max_work,
+                time_limit_s=time_limit_s,
+                nk_switch_tolerance=nk_switch_tolerance,
+            )
         else:
             work = NKWorkPlan.adaptive(
                 adaptive_cycles,
@@ -312,15 +411,23 @@ def nk_work_plan_from_dict(payload: dict[str, Any]) -> NKWorkPlan:
     data = _mapping(payload, name="work")
     policy = CyclePolicy(str(data.get("cycle_policy") or ""))
     adaptive = data.get("adaptive")
-    return NKWorkPlan(
+    work = NKWorkPlan(
         cycle_policy=policy,
         solver_preset=SolverPreset(str(data.get("solver_preset") or SolverPreset.NK.value)),
         fixed_cycles=int(data.get("fixed_cycles") or 0),
         adaptive_schedule=adaptive_schedule_from_dict(adaptive)
         if isinstance(adaptive, dict)
         else None,
+        time_limit_s=data.get("time_limit_s"),
+        nk_switch_tolerance=float(data.get("nk_switch_tolerance", 1.0e-4)),
         metadata=dict(data.get("metadata") or {}),
     )
+    serialized_mode = data.get("resume_mode")
+    if serialized_mode is not None and work.resume_mode != ResumeMode(str(serialized_mode)):
+        raise ContractError(
+            "work.resume_mode does not match its low-level solver_preset/cycle_policy"
+        )
+    return work
 
 
 def stage_plan_from_dict(payload: dict[str, Any]) -> StagePlan:

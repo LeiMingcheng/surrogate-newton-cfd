@@ -112,12 +112,40 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--command-timeout-s", type=float, help="External backend command timeout")
     parser.add_argument("--resume-plan", default="finalonly", help="nk_resume plan preset (model-side CLI supports finalonly)")
     parser.add_argument(
-        "--solver-preset",
-        choices=("none", "nk", "prod", "pseudo"),
-        default="nk",
-        help="Solver preset recorded in the exported final-only plan",
+        "--resume-mode",
+        choices=("ank_nk", "repeated_nk"),
+        default="ank_nk",
+        help="Terminal controller; ank_nk is the default main path",
     )
-    parser.add_argument("--fixed-cycles", type=int, default=5, help="Fixed NK cycles recorded in the export plan")
+    parser.add_argument(
+        "--max-work",
+        type=int,
+        default=2000,
+        help="Per-call ADFLOW work ceiling for ank_nk",
+    )
+    parser.add_argument(
+        "--time-limit-s",
+        type=float,
+        default=10.0,
+        help="Single-case wall-time ceiling for ank_nk",
+    )
+    parser.add_argument(
+        "--l2conv",
+        type=float,
+        default=1.0e-8,
+        help="Relative residual target for terminal resume",
+    )
+    parser.add_argument(
+        "--nk-switch-tol",
+        type=float,
+        default=1.0e-4,
+        help="Relative residual ratio at which ANK switches to NK",
+    )
+    parser.add_argument(
+        "--repeated-nk-cycles",
+        default="6,8,10",
+        help="Repeated Direct-NK cumulative call schedule",
+    )
 
     parser.add_argument("--n-inference-steps", type=int, help="Override FSB inference step count")
     parser.add_argument("--custom-timesteps", help="Comma-separated FSB custom timesteps")
@@ -161,8 +189,16 @@ def main(argv: Optional[list[str]] = None) -> int:
         ordinals=_parse_ordinals(args.ordinals),
         index_path=args.index,
         stats_path=args.stats,
-        solver_preset=args.solver_preset,
-        fixed_cycles=args.fixed_cycles,
+        resume_mode=args.resume_mode,
+        max_work=args.max_work,
+        time_limit_s=args.time_limit_s,
+        nk_switch_tolerance=args.nk_switch_tol,
+        l2conv=args.l2conv,
+        repeated_nk_cycles=tuple(
+            int(item.strip())
+            for item in args.repeated_nk_cycles.split(",")
+            if item.strip()
+        ),
     )
     print(workflow_result_to_json(result))
     return 0

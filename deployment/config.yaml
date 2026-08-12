@@ -19,7 +19,11 @@ flow:
 
 newton:
   enabled: true
-  max_cycles: 10
+  resume_mode: ank_nk
+  max_work: 2000
+  time_limit_s: 10.0
+  nk_switch_tolerance: 1.0e-4
+  repeated_nk_cycles: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
   residual_ratio: 1.0e-8
   ranks_per_case: 8
   pool_count: 1
