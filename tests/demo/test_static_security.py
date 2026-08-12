@@ -39,6 +39,7 @@ class DemoStaticSecurityTests(unittest.TestCase):
     def test_static_html_references_existing_packaged_files(self) -> None:
         route_to_file = {
             "/styles.css": DEMO_ROOT / "static" / "styles.css",
+            "/project.css": DEMO_ROOT / "static" / "project.css",
             "/app.js": DEMO_ROOT / "static" / "app.js",
             "/example-airfoil.dat": DEMO_ROOT / "static" / "example-airfoil.txt",
             "/assets/workflow.svg": DEMO_ROOT / "static" / "assets" / "workflow.svg",
@@ -51,6 +52,27 @@ class DemoStaticSecurityTests(unittest.TestCase):
             "/assets/paper-recovery.jpg": DEMO_ROOT / "static" / "assets" / "paper-recovery.jpg",
             "/assets/paper-optimization.png": (
                 DEMO_ROOT / "static" / "assets" / "paper-optimization.png"
+            ),
+            "/assets/panels/ood-geometries.jpg": (
+                DEMO_ROOT / "static" / "assets" / "panels" / "ood-geometries.jpg"
+            ),
+            "/assets/panels/ood-distance.jpg": (
+                DEMO_ROOT / "static" / "assets" / "panels" / "ood-distance.jpg"
+            ),
+            "/assets/panels/ood-pca.jpg": (
+                DEMO_ROOT / "static" / "assets" / "panels" / "ood-pca.jpg"
+            ),
+            "/assets/panels/recovery-metrics.jpg": (
+                DEMO_ROOT / "static" / "assets" / "panels" / "recovery-metrics.jpg"
+            ),
+            "/assets/panels/recovery-pressure.jpg": (
+                DEMO_ROOT / "static" / "assets" / "panels" / "recovery-pressure.jpg"
+            ),
+            "/assets/panels/optimization-trajectories.png": (
+                DEMO_ROOT / "static" / "assets" / "panels" / "optimization-trajectories.png"
+            ),
+            "/assets/panels/optimization-pressure.png": (
+                DEMO_ROOT / "static" / "assets" / "panels" / "optimization-pressure.png"
             ),
         }
         html_files = (DEMO_ROOT / "static" / "index.html", DEMO_ROOT / "static" / "demo.html")

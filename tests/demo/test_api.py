@@ -231,6 +231,7 @@ class DemoApiTests(unittest.TestCase):
             "/demo",
             "/app.js",
             "/styles.css",
+            "/project.css",
             "/example-airfoil.dat",
             "/assets/workflow.svg",
             "/assets/benchmark.svg",
@@ -239,6 +240,13 @@ class DemoApiTests(unittest.TestCase):
             "/assets/paper-ood-benchmark.jpg",
             "/assets/paper-recovery.jpg",
             "/assets/paper-optimization.png",
+            "/assets/panels/ood-geometries.jpg",
+            "/assets/panels/ood-distance.jpg",
+            "/assets/panels/ood-pca.jpg",
+            "/assets/panels/recovery-metrics.jpg",
+            "/assets/panels/recovery-pressure.jpg",
+            "/assets/panels/optimization-trajectories.png",
+            "/assets/panels/optimization-pressure.png",
         )
         for route in routes:
             with self.subTest(route=route):

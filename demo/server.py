@@ -30,6 +30,7 @@ STATIC_ROUTES = {
     "/demo/": "demo.html",
     "/demo.html": "demo.html",
     "/styles.css": "styles.css",
+    "/project.css": "project.css",
     "/app.js": "app.js",
     "/example-airfoil.dat": "example-airfoil.txt",
     "/assets/workflow.svg": "assets/workflow.svg",
@@ -39,6 +40,13 @@ STATIC_ROUTES = {
     "/assets/paper-ood-benchmark.jpg": "assets/paper-ood-benchmark.jpg",
     "/assets/paper-recovery.jpg": "assets/paper-recovery.jpg",
     "/assets/paper-optimization.png": "assets/paper-optimization.png",
+    "/assets/panels/ood-geometries.jpg": "assets/panels/ood-geometries.jpg",
+    "/assets/panels/ood-distance.jpg": "assets/panels/ood-distance.jpg",
+    "/assets/panels/ood-pca.jpg": "assets/panels/ood-pca.jpg",
+    "/assets/panels/recovery-metrics.jpg": "assets/panels/recovery-metrics.jpg",
+    "/assets/panels/recovery-pressure.jpg": "assets/panels/recovery-pressure.jpg",
+    "/assets/panels/optimization-trajectories.png": "assets/panels/optimization-trajectories.png",
+    "/assets/panels/optimization-pressure.png": "assets/panels/optimization-pressure.png",
 }
 CASE_ROUTE = re.compile(r"^/api/cases/(case_[A-Za-z0-9_]+)$")
 ACTION_ROUTE = re.compile(r"^/api/cases/(case_[A-Za-z0-9_]+)/(recover|reference)$")
