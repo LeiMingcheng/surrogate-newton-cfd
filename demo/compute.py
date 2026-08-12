@@ -59,9 +59,9 @@ GAMMA = 1.4
 EDITOR_POINTS = 241
 MAX_UPLOAD_BYTES = 2_000_000
 MAX_COORDINATE_POINTS = 20_000
-DEMO_ANK_NK_MAX_WORK = 1000
-DEMO_ANK_NK_TIME_LIMIT_S = 10.0
-DEMO_ANK_NK_SWITCH_TOL = 1.0e-4
+DEFAULT_DEMO_ANK_NK_MAX_WORK = 1000
+DEFAULT_DEMO_ANK_NK_TIME_LIMIT_S = 10.0
+DEFAULT_DEMO_ANK_NK_SWITCH_TOL = 1.0e-4
 FIXED_TRAILING_EDGE_THICKNESS = 0.002
 CP_PLOT_X_MAX = 0.999
 UIUC_CATALOG_URL = "https://m-selig.ae.illinois.edu/ads/coord_database.html"
@@ -503,6 +503,9 @@ class DemoEngine:
         statistics: Path | None = None,
         device: str = "cuda:0",
         resident_pool_root: Path | None = None,
+        ank_nk_max_work: int = DEFAULT_DEMO_ANK_NK_MAX_WORK,
+        ank_nk_time_limit_s: float = DEFAULT_DEMO_ANK_NK_TIME_LIMIT_S,
+        ank_nk_switch_tolerance: float = DEFAULT_DEMO_ANK_NK_SWITCH_TOL,
     ) -> None:
         self.runtime_root = Path(runtime_root or _default_runtime_root()).expanduser()
         if not self.runtime_root.is_absolute():
@@ -530,6 +533,15 @@ class DemoEngine:
         self.mpi_ranks = int(mpi_ranks)
         if self.mpi_ranks < 1:
             raise ValueError("DEMO_MPI_RANKS must be positive.")
+        self.ank_nk_max_work = int(ank_nk_max_work)
+        self.ank_nk_time_limit_s = float(ank_nk_time_limit_s)
+        self.ank_nk_switch_tolerance = float(ank_nk_switch_tolerance)
+        if self.ank_nk_max_work < 1:
+            raise ValueError("DEMO_ANK_NK_MAX_WORK must be positive.")
+        if self.ank_nk_time_limit_s <= 0.0:
+            raise ValueError("DEMO_ANK_NK_TIME_LIMIT_S must be positive.")
+        if not 0.0 < self.ank_nk_switch_tolerance < 1.0:
+            raise ValueError("DEMO_ANK_NK_SWITCH_TOL must be between 0 and 1.")
         self.case_root = self.runtime_root / "cases"
         self.mesh_root = self.runtime_root / "meshes"
         self.case_root.mkdir(parents=True, exist_ok=True)
@@ -607,6 +619,11 @@ class DemoEngine:
             "resources": {
                 "gpu": 1,
                 "cpu_ranks_per_case": self.mpi_ranks,
+                "ank_nk": {
+                    "max_work": self.ank_nk_max_work,
+                    "time_limit_s": self.ank_nk_time_limit_s,
+                    "switch_tolerance": self.ank_nk_switch_tolerance,
+                },
                 "reference_state": reference_state_for_mach(1.0),
             },
             "prewarm": self._prewarm_summary,
@@ -968,9 +985,9 @@ class DemoEngine:
         plan = finalonly_plan(
             "fsb",
             work=NKWorkPlan.ank_nk(
-                max_work=DEMO_ANK_NK_MAX_WORK,
-                time_limit_s=DEMO_ANK_NK_TIME_LIMIT_S,
-                nk_switch_tolerance=DEMO_ANK_NK_SWITCH_TOL,
+                max_work=self.ank_nk_max_work,
+                time_limit_s=self.ank_nk_time_limit_s,
+                nk_switch_tolerance=self.ank_nk_switch_tolerance,
             ),
         )
         authority_path = Path(str(prepared.metadata["authority_cgns_path"]))
@@ -1070,9 +1087,9 @@ class DemoEngine:
         plan = finalonly_plan(
             "fsb",
             work=NKWorkPlan.ank_nk(
-                max_work=DEMO_ANK_NK_MAX_WORK,
-                time_limit_s=DEMO_ANK_NK_TIME_LIMIT_S,
-                nk_switch_tolerance=DEMO_ANK_NK_SWITCH_TOL,
+                max_work=self.ank_nk_max_work,
+                time_limit_s=self.ank_nk_time_limit_s,
+                nk_switch_tolerance=self.ank_nk_switch_tolerance,
             ),
         )
         run_root = case_dir / "solver_runs" / f"terminal_nk_{_utc_stamp()}"

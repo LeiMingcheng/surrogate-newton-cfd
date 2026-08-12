@@ -17,6 +17,9 @@ class PublicDeploymentContractTests(unittest.TestCase):
         env = (PUBLIC_ROOT / "public.env.example").read_text(encoding="utf-8")
         self.assertIn("DEMO_PUBLIC_HOST=36.103.234.95", env)
         self.assertIn("DEMO_PUBLIC_ORIGIN=http://36.103.234.95:8888", env)
+        self.assertIn("DEMO_ANK_NK_MAX_WORK=1000", env)
+        self.assertIn("DEMO_ANK_NK_TIME_LIMIT_S=10", env)
+        self.assertIn("DEMO_ANK_NK_SWITCH_TOL=1e-4", env)
         self.assertNotIn("sslip.io", env)
 
     def test_nginx_bootstrap_only_serves_acme_over_http(self) -> None:

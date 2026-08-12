@@ -454,6 +454,21 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--mpi-ranks", type=int, default=int(os.environ.get("DEMO_MPI_RANKS", "8"))
     )
+    parser.add_argument(
+        "--ank-nk-max-work",
+        type=int,
+        default=int(os.environ.get("DEMO_ANK_NK_MAX_WORK", "1000")),
+    )
+    parser.add_argument(
+        "--ank-nk-time-limit-s",
+        type=float,
+        default=float(os.environ.get("DEMO_ANK_NK_TIME_LIMIT_S", "10")),
+    )
+    parser.add_argument(
+        "--ank-nk-switch-tolerance",
+        type=float,
+        default=float(os.environ.get("DEMO_ANK_NK_SWITCH_TOL", "1e-4")),
+    )
     parser.add_argument("--model-dir", default=os.environ.get("SURROGATE_NEWTON_MODEL_DIR"))
     parser.add_argument("--model-config")
     parser.add_argument("--checkpoint")
@@ -599,6 +614,9 @@ def main() -> int:
         "ood_asset_root": args.ood_asset_root,
         "mpi_launcher": args.mpi_launcher,
         "mpi_ranks": args.mpi_ranks,
+        "ank_nk_max_work": args.ank_nk_max_work,
+        "ank_nk_time_limit_s": args.ank_nk_time_limit_s,
+        "ank_nk_switch_tolerance": args.ank_nk_switch_tolerance,
         "model_dir": args.model_dir,
         "checkpoint": args.checkpoint,
         "statistics": args.statistics,

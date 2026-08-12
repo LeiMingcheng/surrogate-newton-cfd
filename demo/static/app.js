@@ -23,6 +23,8 @@ const state = {
   activeJobId: null, activeJobAction: null,
   reynoldsPerMach: DEFAULT_REYNOLDS_PER_MACH,
   mpiRanks: 8,
+  ankNkMaxWork: 1000,
+  ankNkTimeLimitS: 10,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -387,7 +389,7 @@ function syncMethodLabels() {
   const surrogateSteps = Number($("#surrogate-steps").value);
   const stopExponent = Number($("#nk-stop-exponent").value);
   $("#surrogate-stage-detail").textContent = `${surrogateSteps} prediction steps`;
-  $("#nk-stage-detail").textContent = `Converge to ${residualThresholdLabel(stopExponent)} · fixed work ceiling 1000`;
+  $("#nk-stage-detail").textContent = `Converge to ${residualThresholdLabel(stopExponent)} · fixed work ceiling ${state.ankNkMaxWork} · ${formatNumber(state.ankNkTimeLimitS, 0)} s limit`;
   $("#recover-button").textContent = "Run Surrogate + ANK→NK";
 }
 
@@ -614,8 +616,11 @@ function renderResults() { renderCp(); renderMetrics(); renderFields(); }
 async function loadRuntime() {
   try {
     const status = await api("/api/status"); state.surrogateOnline = Boolean(status.surrogate_online); state.solverReady = Boolean(status.solver_ready); state.mpiRanks = Number(status.resources?.cpu_ranks_per_case || 8);
+    state.ankNkMaxWork = Number(status.resources?.ank_nk?.max_work || 1000);
+    state.ankNkTimeLimitS = Number(status.resources?.ank_nk?.time_limit_s || 10);
     state.reynoldsPerMach = Number(status.resources?.reference_state?.reynolds) || DEFAULT_REYNOLDS_PER_MACH;
     syncReferenceState();
+    syncMethodLabels();
     const element = $("#system-status"); element.dataset.state = status.surrogate_online && status.solver_ready ? "online" : "offline";
     const queued = Number(status.scheduler?.queue_depth || 0);
     element.querySelector("span:last-child").textContent = status.surrogate_online

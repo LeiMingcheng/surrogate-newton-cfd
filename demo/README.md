@@ -119,6 +119,9 @@ environment variables:
 | `DEMO_HEAVY_JOB_CONCURRENCY` | `1` | Dedicated heavy-engine workers; only `1` or `2` |
 | `DEMO_NK_BURST_LIMIT` | `3` | Consecutive NK jobs before one waiting cold start is admitted |
 | `DEMO_COLD_START_MAX_WAIT_SEC` | `300` | Maximum cold-start wait before priority promotion |
+| `DEMO_ANK_NK_MAX_WORK` | `1000` | Server-side ADFLOW work ceiling for the continuous ANK-to-NK solve |
+| `DEMO_ANK_NK_TIME_LIMIT_S` | `10` | Server-side ANK-to-NK wall-time ceiling in seconds |
+| `DEMO_ANK_NK_SWITCH_TOL` | `1e-4` | Relative residual ratio at which ANK switches to NK |
 | `DEMO_JOB_RESULT_TTL_SEC` | `86400` | Result retention after terminal state |
 | `DEMO_JOB_CLEANUP_INTERVAL_SEC` | `60` | Expired-result cleanup interval |
 | `DEMO_JOB_MAX_RESULT_BYTES` | `67108864` | Maximum serialized result size per job |
