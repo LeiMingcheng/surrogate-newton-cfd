@@ -27,7 +27,8 @@ services:
       - ${SESSION_SECRET_FILE:?set SESSION_SECRET_FILE}:/run/secrets/demo_session_secret:ro
     read_only: true
     tmpfs:
-      - /tmp:rw,nosuid,nodev,size=2g,mode=1777
+      # pyHyp copies its extension module to /tmp before loading it.
+      - /tmp:rw,exec,nosuid,nodev,size=2g,mode=1777
     security_opt:
       - no-new-privileges:true
     healthcheck:

@@ -60,6 +60,7 @@ class PublicDeploymentContractTests(unittest.TestCase):
         self.assertEqual(
             demo["environment"]["DEMO_ALLOW_INSECURE_PUBLIC_HTTP"], "1"
         )
+        self.assertTrue(any("/tmp:rw,exec" in mount for mount in demo["tmpfs"]))
         self.assertTrue(any("OOD_DIR" in mount for mount in demo["volumes"]))
         self.assertNotIn("ports", demo)
         self.assertNotIn("caddy", services)
