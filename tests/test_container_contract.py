@@ -122,6 +122,17 @@ class ContainerContractTests(unittest.TestCase):
         ):
             self.assertIn(marker, verifier)
 
+    def test_application_layer_preserves_runtime_and_replaces_source(self) -> None:
+        dockerfile = (CONTAINER_ROOT / "Dockerfile.app-layer").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("ARG BASE_IMAGE", dockerfile)
+        self.assertIn("FROM ${BASE_IMAGE}", dockerfile)
+        self.assertIn("COPY . /opt/surrogate-newton/src", dockerfile)
+        self.assertIn("--force-reinstall", dockerfile)
+        self.assertIn("python -m pip check", dockerfile)
+        self.assertIn("USER surrogate", dockerfile)
+
 
 if __name__ == "__main__":
     unittest.main()

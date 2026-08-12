@@ -4,6 +4,13 @@ This directory defines the first-class, single-node NVIDIA container route.
 It deliberately does not replace MDO Lab's native/HPC installation guidance,
 and it does not claim multi-node MPI support.
 
+`Dockerfile` remains the complete reproducible build. For an application-only
+release on a server that already holds a verified immutable runtime image,
+`Dockerfile.app-layer` replaces the source tree and wheel while inheriting the
+unchanged solver binaries, Conda environment, operating-system packages, and
+non-root runtime contract. Always pass an immutable `BASE_IMAGE` tag or digest
+and record both the parent image ID and the new source revision.
+
 ## Locked baseline
 
 - Ubuntu 24.04 build/runtime base (pass a digest through `UBUNTU_IMAGE` for a

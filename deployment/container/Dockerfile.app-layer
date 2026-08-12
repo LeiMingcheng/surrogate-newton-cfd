@@ -1,0 +1,23 @@
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+ARG VCS_REF=unknown
+ARG IMAGE_VERSION=development
+ARG SOURCE_URL=https://github.com/LeiMingcheng/surrogate-newton-cfd
+
+LABEL org.opencontainers.image.source="${SOURCE_URL}" \
+      org.opencontainers.image.revision="${VCS_REF}" \
+      org.opencontainers.image.version="${IMAGE_VERSION}"
+
+USER root
+COPY . /opt/surrogate-newton/src
+RUN ${CONDA_ENV}/bin/python -m pip install \
+        --no-deps --no-build-isolation --force-reinstall \
+        /opt/surrogate-newton/src \
+    && ${CONDA_ENV}/bin/python -m pip check \
+    && chown -R root:root /opt/surrogate-newton/src
+
+WORKDIR /opt/surrogate-newton/src
+USER surrogate
+ENTRYPOINT ["/opt/surrogate-newton/src/deployment/container/entrypoint.sh"]
+CMD ["source-smoke"]
