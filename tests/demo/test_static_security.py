@@ -13,6 +13,17 @@ DEMO_ROOT = REPO_ROOT / "demo"
 
 
 class DemoStaticSecurityTests(unittest.TestCase):
+    def test_demo_presents_recovery_as_nk_without_server_budget_details(self) -> None:
+        html = (DEMO_ROOT / "static" / "demo.html").read_text(encoding="utf-8")
+        script = (DEMO_ROOT / "static" / "app.js").read_text(encoding="utf-8")
+        public_copy = html + script
+        self.assertIn("Surrogate + NK convergence target", html)
+        self.assertIn("fixed compute budget", public_copy)
+        self.assertNotIn("ANK", public_copy)
+        self.assertNotIn("work ceiling", public_copy)
+        self.assertNotIn("wall-time limit", public_copy)
+        self.assertNotIn("ADFLOW work / ceiling", public_copy)
+
     def test_public_demo_has_no_private_runtime_paths_or_credentials(self) -> None:
         forbidden = (
             "/root/",

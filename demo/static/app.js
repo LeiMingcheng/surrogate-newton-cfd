@@ -1,7 +1,7 @@
 "use strict";
 
 const COLORS = { surrogate: "#c66a2b", recovery: "#326a9a", reference: "#253543" };
-const STAGE_LABELS = { surrogate: "Surrogate", recovery: "Surrogate + ANK→NK", reference: "ADflow" };
+const STAGE_LABELS = { surrogate: "Surrogate", recovery: "Surrogate + NK", reference: "ADflow" };
 const NS = "http://www.w3.org/2000/svg";
 const DEFAULT_REYNOLDS_PER_MACH = 22132436.863567192;
 const FIELD_SMOOTHING_PX = 0.7;
@@ -23,8 +23,6 @@ const state = {
   activeJobId: null, activeJobAction: null,
   reynoldsPerMach: DEFAULT_REYNOLDS_PER_MACH,
   mpiRanks: 8,
-  ankNkMaxWork: 1000,
-  ankNkTimeLimitS: 10,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -313,7 +311,10 @@ function drawGeometry() {
 function beginDrag(event) {
   if (state.busy || !state.editorGeometry) return;
   event.preventDefault();
-  state.drag = { pointerId: event.pointerId, side: event.currentTarget.dataset.side, index: Number(event.currentTarget.dataset.index), startClientY: event.clientY, originalUpper: state.editorGeometry.upper.slice(), originalLower: state.editorGeometry.lower.slice(), moved: false };
+  const source = event.currentTarget;
+  const captureTarget = $("#airfoil-svg");
+  captureTarget.setPointerCapture?.(event.pointerId);
+  state.drag = { pointerId: event.pointerId, target: captureTarget, side: source.dataset.side, index: Number(source.dataset.index), startClientY: event.clientY, originalUpper: state.editorGeometry.upper.slice(), originalLower: state.editorGeometry.lower.slice(), moved: false };
   clearCase(); invalidateMesh();
   window.addEventListener("pointermove", continueDrag);
   window.addEventListener("pointerup", finishDrag);
@@ -326,8 +327,20 @@ function continueDrag(event) {
   const rect = $("#airfoil-svg").getBoundingClientRect();
   const clientDelta = event.clientY - state.drag.startClientY;
   if (Math.abs(clientDelta) > 1) state.drag.moved = true;
-  const delta = -(clientDelta / rect.height) * 0.4;
+  const requestedDelta = -(clientDelta / rect.height) * 0.4;
   const original = state.drag.side === "upper" ? state.drag.originalUpper : state.drag.originalLower;
+  const other = state.drag.side === "upper" ? state.drag.originalLower : state.drag.originalUpper;
+  const isUpper = state.drag.side === "upper";
+  const deltaLimits = state.editorGeometry.x.map((xValue, index) => {
+    const influence = handleInfluence(xValue, state.drag.index, state.handleCount);
+    if (influence < 1.0e-6 || xValue <= 1.0e-3 || xValue >= 0.995) return null;
+    const lowerBound = isUpper ? other[index] + 3.0e-4 : -0.25;
+    const upperBound = isUpper ? 0.25 : other[index] - 3.0e-4;
+    return [(lowerBound - original[index]) / influence, (upperBound - original[index]) / influence];
+  }).filter(Boolean);
+  const minDelta = Math.max(-0.18, ...deltaLimits.map(([minimum]) => minimum));
+  const maxDelta = Math.min(0.18, ...deltaLimits.map(([, maximum]) => maximum));
+  const delta = Math.max(minDelta, Math.min(maxDelta, requestedDelta));
   const deformed = original.map((value, index) => value + delta * handleInfluence(state.editorGeometry.x[index], state.drag.index, state.handleCount));
   state.editorGeometry.upper = state.drag.side === "upper" ? deformed : state.drag.originalUpper.slice();
   state.editorGeometry.lower = state.drag.side === "lower" ? deformed : state.drag.originalLower.slice();
@@ -340,10 +353,15 @@ function removeDragListeners() {
   window.removeEventListener("pointercancel", cancelDrag);
 }
 
+function releaseDragPointer(drag) {
+  if (drag?.target?.hasPointerCapture?.(drag.pointerId)) drag.target.releasePointerCapture(drag.pointerId);
+}
+
 async function finishDrag(event) {
   if (!state.drag || event.pointerId !== state.drag.pointerId) return;
   removeDragListeners();
   const drag = state.drag; state.drag = null;
+  releaseDragPointer(drag);
   if (!drag.moved) return;
   setBusy(true, "Projecting the edited surface to CST…");
   try {
@@ -360,8 +378,9 @@ async function finishDrag(event) {
 
 function cancelDrag() {
   if (!state.drag) return;
-  state.editorGeometry.upper = state.drag.originalUpper; state.editorGeometry.lower = state.drag.originalLower;
-  state.drag = null; removeDragListeners(); drawGeometry();
+  const drag = state.drag;
+  state.editorGeometry.upper = drag.originalUpper; state.editorGeometry.lower = drag.originalLower;
+  state.drag = null; removeDragListeners(); releaseDragPointer(drag); drawGeometry();
 }
 
 function updateEnabledState() {
@@ -389,8 +408,8 @@ function syncMethodLabels() {
   const surrogateSteps = Number($("#surrogate-steps").value);
   const stopExponent = Number($("#nk-stop-exponent").value);
   $("#surrogate-stage-detail").textContent = `${surrogateSteps} prediction steps`;
-  $("#nk-stage-detail").textContent = `Converge to ${residualThresholdLabel(stopExponent)} · fixed work ceiling ${state.ankNkMaxWork} · ${formatNumber(state.ankNkTimeLimitS, 0)} s limit`;
-  $("#recover-button").textContent = "Run Surrogate + ANK→NK";
+  $("#nk-stage-detail").textContent = `Target ${residualThresholdLabel(stopExponent)} · fixed compute budget`;
+  $("#recover-button").textContent = "Run Surrogate + NK";
 }
 
 function syncCase(payload) {
@@ -401,8 +420,8 @@ function syncCase(payload) {
   setStageCard("surrogate", payload.stage ? "Complete" : "Ready", payload.stage ? "complete" : "active");
   const recoveryState = payload.recovery
     ? (payload.recovery.converged
-      ? `Converged · work ${payload.recovery.approx_total_its}`
-      : `${payload.recovery.termination} · work ${payload.recovery.approx_total_its}`)
+      ? "Converged"
+      : `Stopped · ${payload.recovery.termination}`)
     : "Ready to run";
   setStageCard("recovery", recoveryState, payload.recovery ? "complete" : "active");
   setStageCard("reference", payload.reference ? (payload.reference.converged ? "Converged" : "Solve complete") : "Optional", payload.reference ? "complete" : "");
@@ -597,8 +616,6 @@ function renderMetrics() {
     ["Drag coefficient, CD", (key, stage) => formatNumber(stage?.forces?.cd, 6)],
     ["Moment coefficient, CM", (key, stage) => formatNumber(stage?.forces?.cm, 5)],
     ["Residual L2 ratio", (key, stage) => formatNumber(stage?.residual?.final, 4)],
-    ["ADFLOW work / ceiling", (key, stage) => key === "recovery" && stage ? `${formatNumber(stage.approx_total_its, 0)} / ${stage.max_work}` : "—"],
-    ["ADFLOW wall-time limit", (key, stage) => key === "recovery" && stage?.time_limit_s ? `${formatNumber(stage.time_limit_s, 0)} s` : "—"],
     ["Full-field MSE vs ADflow", (key, stage) => formatNumber(stage?.reference_mse, 6)],
     ["Force MAE vs ADflow (10|ΔCD| + |ΔCL|)", (key, stage) => formatNumber(stage?.force_mae_reference, 6)],
     ["Model / solver wall time", (key, stage) => { const seconds = stageWallTime(key, stage); return seconds === null || seconds === undefined ? "—" : `${formatNumber(seconds, 3)} s`; }],
@@ -616,8 +633,6 @@ function renderResults() { renderCp(); renderMetrics(); renderFields(); }
 async function loadRuntime() {
   try {
     const status = await api("/api/status"); state.surrogateOnline = Boolean(status.surrogate_online); state.solverReady = Boolean(status.solver_ready); state.mpiRanks = Number(status.resources?.cpu_ranks_per_case || 8);
-    state.ankNkMaxWork = Number(status.resources?.ank_nk?.max_work || 1000);
-    state.ankNkTimeLimitS = Number(status.resources?.ank_nk?.time_limit_s || 10);
     state.reynoldsPerMach = Number(status.resources?.reference_state?.reynolds) || DEFAULT_REYNOLDS_PER_MACH;
     syncReferenceState();
     syncMethodLabels();
@@ -793,14 +808,14 @@ async function runPrediction() {
 
 async function runRecovery() {
   if (!state.case) return; const residualExponent = Number($("#nk-stop-exponent").value); const thresholdLabel = residualThresholdLabel(residualExponent);
-  setBusy(true, `Running one ANK→NK continuation to residual L2 ratio ${thresholdLabel} with a fixed work ceiling…`); setStageCard("recovery", "Running", "running");
+  setBusy(true, `Running NK correction toward residual L2 ratio ${thresholdLabel} with a fixed compute budget…`); setStageCard("recovery", "Running", "running");
   try {
     const payload = await runQueuedJob("recover", { case_id: state.case.case_id, residual_exponent: residualExponent });
     syncCase(payload);
     const recovery = payload.recovery;
     setMessage(recovery.converged
-      ? `Surrogate + ANK→NK converged using ${recovery.approx_total_its} ADFLOW work units (MPI ${state.mpiRanks}).`
-      : `Surrogate + ANK→NK stopped with ${recovery.termination} at ${recovery.approx_total_its} / ${recovery.max_work} work units; target ${thresholdLabel} (MPI ${state.mpiRanks}).`);
+      ? `Surrogate + NK converged to the requested target (MPI ${state.mpiRanks}).`
+      : `Surrogate + NK used its fixed compute budget and stopped with ${recovery.termination}; target ${thresholdLabel} (MPI ${state.mpiRanks}).`);
   } catch (error) {
     setStageCard("recovery", error.jobState === "cancelled" ? "Awaiting request" : "Failed", "active");
     setMessage(error.message, error.jobState !== "cancelled");

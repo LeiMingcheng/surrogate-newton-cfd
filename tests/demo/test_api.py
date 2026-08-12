@@ -12,7 +12,7 @@ from pathlib import Path
 
 from demo.compute import DemoEngine
 from demo.jobs import JobScheduler
-from demo.server import DemoRequestHandler
+from demo.server import DemoRequestHandler, SlidingWindowRateLimiter
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 EXAMPLE_PATH = REPO_ROOT / "demo" / "static" / "example-airfoil.txt"
@@ -176,6 +176,66 @@ class DemoApiTests(unittest.TestCase):
         )
         self.assertEqual(project_code, 200)
         self.assertEqual(len(projected["geometry27"]), 27)
+
+    def test_geometry_projection_has_an_independent_interaction_budget(self) -> None:
+        limiter = SlidingWindowRateLimiter()
+        handler = type(
+            "RateLimitedGeometryDemoRequestHandler",
+            (DemoRequestHandler,),
+            {
+                "engine": self.engine,
+                "scheduler": self.scheduler,
+                "rate_limiter": limiter,
+            },
+        )
+        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        server.daemon_threads = True
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            geometry = self.engine.presets()["presets"][0]
+
+            def request(path: str, payload: object) -> tuple[int, dict[str, object]]:
+                connection = HTTPConnection(
+                    "127.0.0.1", int(server.server_address[1]), timeout=10
+                )
+                connection.request(
+                    "POST",
+                    path,
+                    body=json.dumps(payload),
+                    headers={"Content-Type": "application/json"},
+                )
+                response = connection.getresponse()
+                body = json.loads(response.read().decode("utf-8"))
+                connection.close()
+                return response.status, body
+
+            project_payload = {
+                "name": "Repeated edit fixture",
+                "x": geometry["x"],
+                "upper": geometry["upper"],
+                "lower": geometry["lower"],
+            }
+            for _ in range(35):
+                status, response = request("/api/geometry/project", project_payload)
+                self.assertEqual(status, 200, response)
+
+            status, submitted = request(
+                "/api/jobs",
+                {
+                    "action": "mesh",
+                    "payload": {
+                        "geometry27": geometry["geometry27"],
+                        "name": "Rate-limit fixture",
+                    },
+                },
+            )
+            self.assertEqual(status, 202, submitted)
+            self.scheduler.cancel(str(submitted["job"]["job_id"]))
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
 
     def test_uiuc_catalog_and_airfoil(self) -> None:
         catalog_code, catalog = self.request("GET", "/api/uiuc/catalog")

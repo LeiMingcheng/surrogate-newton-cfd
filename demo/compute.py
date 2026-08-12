@@ -1079,7 +1079,7 @@ class DemoEngine:
         residual_exponent: int = 6,
     ) -> dict[str, Any]:
         if residual_exponent < 4 or residual_exponent > 10:
-            raise ValueError("ANK-to-NK stopping exponent must be between 4 and 10.")
+            raise ValueError("NK stopping exponent must be between 4 and 10.")
         residual_threshold = 10.0 ** (-int(residual_exponent))
         case_dir = self._case_dir(case_id)
         with np.load(case_dir / "surrogate_state.npz", allow_pickle=False) as data:
@@ -1262,7 +1262,7 @@ class DemoEngine:
         is_recovery = result_kind == "recovery"
         return {
             "key": result_kind,
-            "label": "Surrogate + ANK→NK"
+            "label": "Surrogate + NK"
             if is_recovery
             else "Cold-start ADflow reference",
             "status": "complete",

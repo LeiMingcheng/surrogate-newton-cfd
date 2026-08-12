@@ -109,7 +109,7 @@ def validate_job_payload(action: str, payload: dict[str, Any]) -> dict[str, Any]
     if action == "recover":
         if "cycles" in payload:
             raise ValueError(
-                "ANK-to-NK work is fixed by the server; cycles is not configurable."
+                "The NK compute budget is fixed by the server; cycles is not configurable."
             )
         normalized["residual_exponent"] = _require_number(
             payload,

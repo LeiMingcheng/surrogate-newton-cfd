@@ -333,7 +333,10 @@ class DemoRequestHandler(BaseHTTPRequestHandler):
         path = unquote(urlparse(self.path).path)
         try:
             self._require_same_origin()
-            self._require_rate_limit("post", limit=30)
+            if path == "/api/geometry/project":
+                self._require_rate_limit("geometry-project", limit=180)
+            else:
+                self._require_rate_limit("post", limit=30)
             action_match = ACTION_ROUTE.match(path)
             if path not in {
                 "/api/geometry/import",
