@@ -39,6 +39,7 @@ class PublicDeploymentContractTests(unittest.TestCase):
         self.assertIn("client_max_body_size 2m", config)
         self.assertIn("server 127.0.0.1:18082", config)
         self.assertIn("proxy_set_header X-Forwarded-Proto https", config)
+        self.assertIn("proxy_buffering off", config)
         self.assertIn("location = / {", config)
         self.assertIn("location = /index.html {", config)
         self.assertIn(
@@ -53,6 +54,7 @@ class PublicDeploymentContractTests(unittest.TestCase):
         self.assertIn("client_max_body_size 2m", config)
         self.assertIn("server 127.0.0.1:18082", config)
         self.assertIn("proxy_set_header X-Forwarded-Proto http", config)
+        self.assertIn("proxy_buffering off", config)
         self.assertIn("location = / {", config)
         self.assertIn("location = /index.html {", config)
         self.assertIn(
