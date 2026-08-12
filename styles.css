@@ -147,10 +147,6 @@ h1 {
   transition: background 150ms ease, transform 150ms ease;
 }
 
-.resource-links a:last-child {
-  background: var(--accent-dark);
-}
-
 .button-icon {
   display: inline-grid;
   place-items: center;
@@ -170,6 +166,66 @@ h1 {
 .resource-links a:hover,
 .resource-links a:focus-visible {
   background: var(--accent-dark);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.interactive-project-link {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 15px;
+  width: min(560px, 100%);
+  margin: 16px auto 0;
+  padding: 15px 19px;
+  border: 1px solid #173a5b;
+  border-radius: 14px;
+  color: #fff;
+  background: var(--accent-dark);
+  box-shadow: 0 7px 20px rgba(29, 68, 107, 0.16);
+  text-align: left;
+  text-decoration: none;
+  transition: background 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.interactive-project-icon {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  color: var(--accent-dark);
+  background: #fff;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.interactive-project-copy {
+  display: grid;
+  gap: 2px;
+}
+
+.interactive-project-copy strong {
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.interactive-project-copy small {
+  color: #dce8f3;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.interactive-project-arrow {
+  color: #dce8f3;
+  font-size: 18px;
+}
+
+.interactive-project-link:hover,
+.interactive-project-link:focus-visible {
+  color: #fff;
+  background: #153653;
+  box-shadow: 0 9px 24px rgba(29, 68, 107, 0.23);
   outline: none;
   transform: translateY(-1px);
 }
@@ -569,6 +625,24 @@ pre {
 }
 
 @media (max-width: 520px) {
+  .interactive-project-link {
+    gap: 11px;
+    padding: 13px 15px;
+  }
+
+  .interactive-project-icon {
+    width: 34px;
+    height: 34px;
+  }
+
+  .interactive-project-copy strong {
+    font-size: 15px;
+  }
+
+  .interactive-project-copy small {
+    font-size: 11px;
+  }
+
   .method-intro {
     text-align: left;
   }
@@ -609,7 +683,8 @@ pre {
     scroll-behavior: auto;
   }
 
-  .resource-links a {
+  .resource-links a,
+  .interactive-project-link {
     transition: none;
   }
 }
