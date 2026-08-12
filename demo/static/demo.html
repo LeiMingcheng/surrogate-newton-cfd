@@ -6,7 +6,7 @@
     <meta name="description" content="Interactive Surrogate–Newton CFD airfoil prediction and Newton–Krylov correction demonstration.">
     <title>Surrogate–Newton CFD · Interactive demo</title>
     <link rel="icon" href="data:,">
-    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/styles.css?v=20260812-controls2">
   </head>
   <body class="demo-page">
     <main class="demo-shell">
@@ -55,7 +55,7 @@
                 <p class="control-help">The example contains separate <code>zone upper</code> and <code>zone lower</code> x–y sections.</p>
               </div>
               <div class="mode-panel" data-panel="custom" hidden>
-                <label class="compact-control" for="handle-count"><span>Internal drag points<small>Per surface</small></span><input id="handle-count" type="number" min="3" max="16" step="1" value="6"></label>
+                <label class="horizontal-setting custom-setting" for="handle-count"><span>Internal drag points<small>Per surface</small></span><input id="handle-count" type="number" min="3" max="16" step="1" value="6"></label>
                 <p class="control-help">Cosine-spaced points deform the surface smoothly; the leading and trailing edges remain fixed.</p>
               </div>
             </div>
@@ -92,7 +92,7 @@
           <div class="method-bar-heading"><strong>Method settings</strong><span>Set the prediction budget and NK target, then prepare the shared mesh.</span></div>
           <div class="method-setting-grid">
             <label class="horizontal-setting" for="surrogate-steps"><span>Surrogate steps<small>Default 5; 5–10 recommended</small></span><input id="surrogate-steps" type="number" min="1" max="20" step="1" value="5"></label>
-            <label class="horizontal-setting nk-setting" for="nk-stop-exponent"><span>Surrogate + NK convergence target<small>10^-p · fixed compute budget</small></span><input id="nk-stop-exponent" aria-label="Exponent p" type="number" min="4" max="10" step="1" value="6"></label>
+            <label class="horizontal-setting" for="nk-stop-exponent"><span>Surrogate + NK convergence target<small>10^-p · fixed compute budget</small></span><input id="nk-stop-exponent" aria-label="Exponent p" type="number" min="4" max="10" step="1" value="6"></label>
             <div class="mesh-preparation"><button id="mesh-button" class="action-button" disabled>Generate mesh</button><div id="mesh-status" class="mesh-status">Mesh not generated.</div></div>
           </div>
           <p id="case-message" class="case-message" role="status" aria-live="polite">Preparing the local workspace.</p>

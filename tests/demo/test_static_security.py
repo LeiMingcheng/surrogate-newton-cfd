@@ -20,6 +20,9 @@ class DemoStaticSecurityTests(unittest.TestCase):
         self.assertIn("Surrogate + NK convergence target", html)
         self.assertIn("10^-p · fixed compute budget", html)
         self.assertNotIn('class="target-value"', html)
+        self.assertIn('class="horizontal-setting custom-setting"', html)
+        self.assertNotIn("compact-control", html)
+        self.assertNotIn("nk-setting", html)
         self.assertIn("fixed compute budget", public_copy)
         self.assertNotIn("ANK", public_copy)
         self.assertNotIn("work ceiling", public_copy)
@@ -65,7 +68,7 @@ class DemoStaticSecurityTests(unittest.TestCase):
 
     def test_static_html_references_existing_packaged_files(self) -> None:
         route_to_file = {
-            "/styles.css": DEMO_ROOT / "static" / "styles.css",
+            "/styles.css?v=20260812-controls2": DEMO_ROOT / "static" / "styles.css",
             "/project.css": DEMO_ROOT / "static" / "project.css",
             "/app.js": DEMO_ROOT / "static" / "app.js",
             "/example-airfoil.dat": DEMO_ROOT / "static" / "example-airfoil.txt",
