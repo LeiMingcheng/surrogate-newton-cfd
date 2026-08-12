@@ -36,6 +36,12 @@ class PublicDeploymentContractTests(unittest.TestCase):
         self.assertIn("client_max_body_size 2m", config)
         self.assertIn("server 127.0.0.1:18082", config)
         self.assertIn("proxy_set_header X-Forwarded-Proto https", config)
+        self.assertIn("location = / {", config)
+        self.assertIn("location = /index.html {", config)
+        self.assertIn(
+            "return 302 https://leimingcheng.github.io/surrogate-newton-cfd/;",
+            config,
+        )
 
     def test_nginx_http_preview_contract(self) -> None:
         config = (PUBLIC_ROOT / "nginx-http-preview.conf").read_text(encoding="utf-8")
@@ -44,6 +50,12 @@ class PublicDeploymentContractTests(unittest.TestCase):
         self.assertIn("client_max_body_size 2m", config)
         self.assertIn("server 127.0.0.1:18082", config)
         self.assertIn("proxy_set_header X-Forwarded-Proto http", config)
+        self.assertIn("location = / {", config)
+        self.assertIn("location = /index.html {", config)
+        self.assertIn(
+            "return 302 https://leimingcheng.github.io/surrogate-newton-cfd/;",
+            config,
+        )
         self.assertNotIn("auth_basic", config)
 
     def test_compose_keeps_native_ports_private_and_mounts_all_assets(self) -> None:

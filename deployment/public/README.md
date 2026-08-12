@@ -20,6 +20,13 @@ Auth on this plaintext listener and do not accept confidential, proprietary,
 personal, or otherwise sensitive uploads. This is a preview fallback, not an
 equivalent replacement for HTTPS.
 
+The paper project page remains on GitHub Pages at
+`https://leimingcheng.github.io/surrogate-newton-cfd/`. Only the interactive
+demo and API use the compute server: the demo URL is
+`http://36.103.234.95:8888/demo`, and requests to the server root or
+`/index.html` redirect to GitHub Pages. The same separation is preserved by the
+future HTTPS configuration.
+
 The deployment is addressed directly as `https://36.103.234.95`; it does not
 depend on a purchased domain, an external wildcard-DNS service, an SSH tunnel,
 or the development Mac. Let's Encrypt IP-address certificates use the
