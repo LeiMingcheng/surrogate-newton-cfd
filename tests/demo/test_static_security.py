@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 import unittest
 from pathlib import Path
@@ -101,22 +102,25 @@ class DemoStaticSecurityTests(unittest.TestCase):
     def test_demo_tree_has_no_generated_runtime_artifacts(self) -> None:
         forbidden_names = {"__pycache__", "server_info.md"}
         forbidden_suffixes = {".pyc", ".cgns", ".npz", ".pt", ".log"}
-        result = subprocess.run(
-            [
-                "git",
-                "ls-files",
-                "--cached",
-                "--others",
-                "--exclude-standard",
-                "demo",
-            ],
-            cwd=REPO_ROOT,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        for relative in result.stdout.splitlines():
-            path = REPO_ROOT / relative
+        if shutil.which("git"):
+            result = subprocess.run(
+                [
+                    "git",
+                    "ls-files",
+                    "--cached",
+                    "--others",
+                    "--exclude-standard",
+                    "demo",
+                ],
+                cwd=REPO_ROOT,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            paths = (REPO_ROOT / relative for relative in result.stdout.splitlines())
+        else:
+            paths = (path for path in DEMO_ROOT.rglob("*") if path.is_file())
+        for path in paths:
             with self.subTest(path=path):
                 self.assertNotIn(path.name, forbidden_names)
                 self.assertNotIn(path.suffix.lower(), forbidden_suffixes)
