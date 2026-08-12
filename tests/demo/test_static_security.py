@@ -119,7 +119,11 @@ class DemoStaticSecurityTests(unittest.TestCase):
             )
             paths = (REPO_ROOT / relative for relative in result.stdout.splitlines())
         else:
-            paths = (path for path in DEMO_ROOT.rglob("*") if path.is_file())
+            paths = (
+                path
+                for path in DEMO_ROOT.rglob("*")
+                if path.is_file() and "__pycache__" not in path.parts
+            )
         for path in paths:
             with self.subTest(path=path):
                 self.assertNotIn(path.name, forbidden_names)
