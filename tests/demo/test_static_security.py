@@ -53,26 +53,29 @@ class DemoStaticSecurityTests(unittest.TestCase):
             "/assets/paper-optimization.png": (
                 DEMO_ROOT / "static" / "assets" / "paper-optimization.png"
             ),
-            "/assets/panels/ood-geometries.jpg": (
-                DEMO_ROOT / "static" / "assets" / "panels" / "ood-geometries.jpg"
+            "/assets/original/fig1_workflow.png": (
+                DEMO_ROOT / "static" / "assets" / "original" / "fig1_workflow.png"
             ),
-            "/assets/panels/ood-distance.jpg": (
-                DEMO_ROOT / "static" / "assets" / "panels" / "ood-distance.jpg"
+            "/assets/original/fig2_a_dataset_geometries.svg": (
+                DEMO_ROOT / "static" / "assets" / "original" / "fig2_a_dataset_geometries.svg"
             ),
-            "/assets/panels/ood-pca.jpg": (
-                DEMO_ROOT / "static" / "assets" / "panels" / "ood-pca.jpg"
+            "/assets/original/fig2_b_geometry_ood_score_distribution.svg": (
+                DEMO_ROOT / "static" / "assets" / "original" / "fig2_b_geometry_ood_score_distribution.svg"
             ),
-            "/assets/panels/recovery-metrics.jpg": (
-                DEMO_ROOT / "static" / "assets" / "panels" / "recovery-metrics.jpg"
+            "/assets/original/fig2_c_geometry_pca_projection.svg": (
+                DEMO_ROOT / "static" / "assets" / "original" / "fig2_c_geometry_pca_projection.svg"
             ),
-            "/assets/panels/recovery-pressure.jpg": (
-                DEMO_ROOT / "static" / "assets" / "panels" / "recovery-pressure.jpg"
+            "/assets/original/fig3_a_recovery_comparison.svg": (
+                DEMO_ROOT / "static" / "assets" / "original" / "fig3_a_recovery_comparison.svg"
             ),
-            "/assets/panels/optimization-trajectories.png": (
-                DEMO_ROOT / "static" / "assets" / "panels" / "optimization-trajectories.png"
+            "/assets/original/fig3_c_ellipse_pressure_recovery.svg": (
+                DEMO_ROOT / "static" / "assets" / "original" / "fig3_c_ellipse_pressure_recovery.svg"
             ),
-            "/assets/panels/optimization-pressure.png": (
-                DEMO_ROOT / "static" / "assets" / "panels" / "optimization-pressure.png"
+            "/assets/original/fig5_a_optimization_curves_2x2_nk.svg": (
+                DEMO_ROOT / "static" / "assets" / "original" / "fig5_a_optimization_curves_2x2_nk.svg"
+            ),
+            "/assets/original/fig5_b_cp_summary_2row_nk.svg": (
+                DEMO_ROOT / "static" / "assets" / "original" / "fig5_b_cp_summary_2row_nk.svg"
             ),
         }
         html_files = (DEMO_ROOT / "static" / "index.html", DEMO_ROOT / "static" / "demo.html")

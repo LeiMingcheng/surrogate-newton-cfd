@@ -39,7 +39,7 @@
       </header>
 
       <section class="teaser page-wide" aria-labelledby="teaser-caption">
-        <img src="/assets/paper-workflow.jpg" alt="Comparison of standalone surrogate prediction, conventional cold-start CFD, and solver-coupled Surrogate-Newton CFD">
+        <img src="/assets/original/fig1_workflow.png" alt="Comparison of standalone surrogate prediction, conventional cold-start CFD, and solver-coupled Surrogate-Newton CFD">
         <p id="teaser-caption" class="lead-caption">
           <strong>Surrogate-Newton CFD</strong> uses a learned full-field prediction to enter the convergence region of the target solver, then applies Newton-Krylov updates until the native residual satisfies the solver tolerance.
         </p>
@@ -86,16 +86,16 @@
 
         <div class="figure-grid benchmark-grid">
           <figure class="figure-panel panel-tall">
-            <img src="/assets/panels/ood-geometries.jpg" alt="Laminar training, supercritical training, and optimization benchmark airfoil populations" loading="lazy">
+            <img src="/assets/original/fig2_a_dataset_geometries.svg" alt="Laminar training, supercritical training, and optimization benchmark airfoil populations" loading="lazy">
             <figcaption><strong>(a) Geometry populations.</strong> Optimization generates shapes that differ systematically from the training families.</figcaption>
           </figure>
           <figure class="figure-panel">
-            <img src="/assets/panels/ood-distance.jpg" alt="Nearest-neighbour distance distributions for training, validation, and benchmark geometries" loading="lazy">
+            <img src="/assets/original/fig2_b_geometry_ood_score_distribution.svg" alt="Nearest-neighbour distance distributions for training, validation, and benchmark geometries" loading="lazy">
             <figcaption><strong>(b) Nearest-neighbour distance.</strong> Most benchmark geometries lie beyond the training distribution's high-percentile region.</figcaption>
           </figure>
         </div>
         <figure class="figure-panel figure-wide">
-          <img src="/assets/panels/ood-pca.jpg" alt="Principal-component projection of training, validation, optimization benchmark, and reference airfoils" loading="lazy">
+          <img src="/assets/original/fig2_c_geometry_pca_projection.svg" alt="Principal-component projection of training, validation, optimization benchmark, and reference airfoils" loading="lazy">
           <figcaption><strong>(c) Shape-space projection.</strong> Benchmark and reference sequences probe increasingly sparse regions around and beyond the training support.</figcaption>
         </figure>
       </section>
@@ -110,7 +110,7 @@
 
         <div class="results-stack">
           <figure class="figure-panel result-row">
-            <div class="result-image"><img src="/assets/panels/recovery-metrics.jpg" alt="Residual, field, lift, and drag error distributions before and after correction" loading="lazy"></div>
+            <div class="result-image"><img src="/assets/original/fig3_a_recovery_comparison.svg" alt="Residual, field, lift, and drag error distributions before and after correction" loading="lazy"></div>
             <figcaption>
               <span class="figure-number">Result 1</span>
               <strong>Residual and aerodynamic errors decrease together.</strong>
@@ -119,7 +119,7 @@
           </figure>
 
           <figure class="figure-panel result-row reverse">
-            <div class="result-image"><img src="/assets/panels/recovery-pressure.jpg" alt="Pressure fields and absolute errors before and after Newton-Krylov correction across increasing OOD distance" loading="lazy"></div>
+            <div class="result-image"><img src="/assets/original/fig3_c_ellipse_pressure_recovery.svg" alt="Pressure fields and absolute errors before and after Newton-Krylov correction across increasing OOD distance" loading="lazy"></div>
             <figcaption>
               <span class="figure-number">Result 2</span>
               <strong>Correction remains effective beyond the training support.</strong>
@@ -139,11 +139,11 @@
 
         <div class="figure-grid optimization-grid">
           <figure class="figure-panel">
-            <img src="/assets/panels/optimization-trajectories.png" alt="Optimization trajectories for RAE2822 and OAT15A with surrogate-only and surrogate-Newton evaluation" loading="lazy">
+            <img src="/assets/original/fig5_a_optimization_curves_2x2_nk.svg" alt="Optimization trajectories for RAE2822 and OAT15A with surrogate-only and surrogate-Newton evaluation" loading="lazy">
             <figcaption><strong>(a) Optimization histories.</strong> Correction brings the online estimate closer to converged CFD verification for both design tasks.</figcaption>
           </figure>
           <figure class="figure-panel">
-            <img src="/assets/panels/optimization-pressure.png" alt="Optimized airfoil geometries and surface pressure distributions at three Mach numbers" loading="lazy">
+            <img src="/assets/original/fig5_b_cp_summary_2row_nk.svg" alt="Optimized airfoil geometries and surface pressure distributions at three Mach numbers" loading="lazy">
             <figcaption><strong>(b) Final designs.</strong> Surface-pressure distributions of corrected candidates track the converged CFD solutions across three operating conditions.</figcaption>
           </figure>
         </div>

@@ -240,13 +240,14 @@ class DemoApiTests(unittest.TestCase):
             "/assets/paper-ood-benchmark.jpg",
             "/assets/paper-recovery.jpg",
             "/assets/paper-optimization.png",
-            "/assets/panels/ood-geometries.jpg",
-            "/assets/panels/ood-distance.jpg",
-            "/assets/panels/ood-pca.jpg",
-            "/assets/panels/recovery-metrics.jpg",
-            "/assets/panels/recovery-pressure.jpg",
-            "/assets/panels/optimization-trajectories.png",
-            "/assets/panels/optimization-pressure.png",
+            "/assets/original/fig1_workflow.png",
+            "/assets/original/fig2_a_dataset_geometries.svg",
+            "/assets/original/fig2_b_geometry_ood_score_distribution.svg",
+            "/assets/original/fig2_c_geometry_pca_projection.svg",
+            "/assets/original/fig3_a_recovery_comparison.svg",
+            "/assets/original/fig3_c_ellipse_pressure_recovery.svg",
+            "/assets/original/fig5_a_optimization_curves_2x2_nk.svg",
+            "/assets/original/fig5_b_cp_summary_2row_nk.svg",
         )
         for route in routes:
             with self.subTest(route=route):
