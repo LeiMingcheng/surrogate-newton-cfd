@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="Interactive Surrogate–Newton CFD airfoil prediction and solver-correction demonstration.">
+    <meta name="description" content="Interactive Surrogate–Newton CFD airfoil prediction and ANK-to-NK solver-correction demonstration.">
     <title>Surrogate–Newton CFD · Interactive demo</title>
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="/styles.css">
@@ -12,9 +12,10 @@
     <main class="demo-shell">
       <header class="demo-masthead">
         <a class="back-link" href="/">← Project page</a>
-        <h1>Surrogate prediction and Newton–Krylov correction</h1>
-        <p>Compare a configurable Surrogate prediction, Newton–Krylov correction, and an optional cold-start ADflow reference on the same mesh.</p>
+        <h1>Surrogate prediction and ANK-to-NK correction</h1>
+        <p>Compare a configurable Surrogate prediction, one continuous ADflow ANK→NK correction, and an optional cold-start ADflow reference on the same mesh.</p>
         <p class="transport-notice"><strong>Public research preview over HTTP.</strong> Traffic is not encrypted. Do not upload confidential, proprietary, personal, or otherwise sensitive geometries or data.</p>
+        <p class="resource-notice"><strong>Shared research server.</strong> Compute resources are limited, so requests may queue and solver runs may be slower during periods of concentrated access. You can leave this page open while your job is waiting.</p>
         <div id="system-status" class="runtime-status" data-state="pending"><span class="status-dot"></span><span>Checking local runtime…</span></div>
       </header>
 
@@ -108,7 +109,7 @@
         <div class="solver-actions"><button id="predict-button" class="action-button surrogate-run" disabled>Run Surrogate</button><button id="recover-button" class="action-button nk-run" disabled>Run Surrogate + ANK→NK</button><button id="reference-button" class="action-button adflow-run" disabled>Run cold-start ADflow</button></div>
 
         <article class="result-panel cp-panel">
-          <div class="result-heading"><div><h3>Surface pressure coefficient</h3><p>All methods share the same axes; ADflow uses a broad reference stroke, NK uses circles, and the Surrogate uses squares so coincident curves remain visible.</p></div><div id="cp-legend" class="plot-legend"></div></div>
+          <div class="result-heading"><div><h3>Surface pressure coefficient</h3><p>All methods share the same axes; cold-start ADflow uses a broad reference stroke, ANK→NK uses circles, and the Surrogate uses squares so coincident curves remain visible.</p></div><div id="cp-legend" class="plot-legend"></div></div>
           <div class="plot-frame"><svg id="cp-chart" viewBox="0 0 900 390" role="img" aria-label="Pressure coefficient comparison"><g class="chart-grid"></g><g class="chart-series"></g><g class="chart-labels"></g></svg><p class="empty-plot" id="cp-empty">Run the Surrogate to populate the comparison.</p></div>
         </article>
 

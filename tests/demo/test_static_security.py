@@ -136,6 +136,12 @@ class DemoStaticSecurityTests(unittest.TestCase):
         self.assertIn('"static/assets/*.jpg"', pyproject)
         self.assertIn('"static/assets/*.png"', pyproject)
 
+    def test_demo_discloses_transport_and_shared_compute_limits(self) -> None:
+        html = (DEMO_ROOT / "static" / "demo.html").read_text(encoding="utf-8")
+        self.assertIn("Public research preview over HTTP", html)
+        self.assertIn("Compute resources are limited", html)
+        self.assertIn("requests may queue", html)
+
 
 if __name__ == "__main__":
     unittest.main()

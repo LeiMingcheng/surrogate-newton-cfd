@@ -659,6 +659,17 @@ select:disabled {
   line-height: 1.55;
 }
 
+.demo-masthead > .resource-notice {
+  max-width: 830px;
+  margin-top: 10px;
+  padding: 11px 14px;
+  border-left: 3px solid var(--steel);
+  color: #35556f;
+  background: #eef5fa;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .runtime-status {
   position: absolute;
   top: 44px;
