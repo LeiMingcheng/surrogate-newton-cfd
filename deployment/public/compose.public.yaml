@@ -14,6 +14,7 @@ services:
       DEMO_SURROGATE_HOST: 127.0.0.1
       DEMO_SURROGATE_PORT: "65432"
       DEMO_PUBLIC_MODE: "1"
+      DEMO_HARD_TIMEOUT_EXIT: "1"
       DEMO_SESSION_SECRET_FILE: /run/secrets/demo_session_secret
       DEMO_HEAVY_JOB_CONCURRENCY: "1"
       DEMO_MPI_RANKS: "8"

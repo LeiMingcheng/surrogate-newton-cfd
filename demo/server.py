@@ -543,6 +543,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         default=os.environ.get("DEMO_PUBLIC_MODE", "0") == "1",
     )
+    parser.add_argument(
+        "--hard-timeout-exit",
+        action="store_true",
+        default=os.environ.get("DEMO_HARD_TIMEOUT_EXIT", "0") == "1",
+        help="Exit the process when a native job exceeds its deadline so the supervisor restarts it.",
+    )
     parser.add_argument("--skip-prewarm", action="store_true")
     return parser
 
@@ -629,7 +635,7 @@ def main() -> int:
             case_root=engine.case_root,
             case_ttl_sec=args.case_ttl_sec,
             enforce_case_ownership=args.public_mode,
-            hard_timeout_handler=hard_timeout_exit if args.public_mode else None,
+            hard_timeout_handler=hard_timeout_exit if args.hard_timeout_exit else None,
             cancel_grace_sec=args.cancel_grace_sec,
             action_timeouts={
                 "mesh": args.mesh_job_timeout_sec,
@@ -672,6 +678,7 @@ def main() -> int:
                     "cold_start_max_wait_sec": args.cold_start_max_wait_sec,
                     "max_pending_jobs": args.max_pending_jobs,
                     "public_mode": args.public_mode,
+                    "hard_timeout_exit": args.hard_timeout_exit,
                     "prewarm": not args.skip_prewarm,
                 },
                 sort_keys=True,
