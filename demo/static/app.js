@@ -6,6 +6,9 @@ const NS = "http://www.w3.org/2000/svg";
 const DEFAULT_REYNOLDS_PER_MACH = 22132436.863567192;
 const FIELD_SMOOTHING_PX = 0.7;
 const JOB_POLL_INTERVAL_MS = 750;
+const DEFAULT_HANDLE_COUNT = 6;
+const MIN_HANDLE_COUNT = 3;
+const MAX_HANDLE_COUNT = 16;
 const ACTIVE_JOB_STORAGE_KEY = "surrogate-newton-active-job";
 const JOB_LABELS = {
   mesh: "Mesh generation and solver preparation",
@@ -19,7 +22,7 @@ const state = {
   uploadedGeometry: null, customGeometry: null, geometryMode: "existing",
   existingGeometry: null, selectedAirfoil: "local:rae2822", uiucCatalog: [], uiucSource: null,
   mesh: null, case: null, stages: {}, surrogateOnline: false, solverReady: false,
-  busy: false, drag: null, handleCount: 6,
+  busy: false, drag: null, handleCount: DEFAULT_HANDLE_COUNT,
   activeJobId: null, activeJobAction: null,
   reynoldsPerMach: DEFAULT_REYNOLDS_PER_MACH,
   mpiRanks: 8,
@@ -388,6 +391,8 @@ function updateEnabledState() {
   $("#airfoil-preset").disabled = state.busy || Object.keys(state.presets).length === 0;
   $("#airfoil-search").disabled = state.busy || Object.keys(state.presets).length === 0;
   $("#coordinate-file").disabled = state.busy;
+  $("#handle-count").disabled = state.busy;
+  $("#reset-geometry").disabled = state.busy;
   $("#mesh-button").disabled = state.busy || !state.geometry || !state.solverReady;
   $("#predict-button").disabled = state.busy || !state.geometry || !state.mesh || !state.surrogateOnline;
   $("#recover-button").disabled = state.busy || !state.case?.stage;
@@ -841,16 +846,29 @@ function bindRange(rangeSelector, numberSelector, callback = null) {
   number.addEventListener("input", () => { range.value = number.value; if (callback) callback(); clearCase(); });
 }
 
+function updateHandleCount(rawValue, { commit = false } = {}) {
+  const parsed = Number(rawValue);
+  if (!Number.isFinite(parsed)) return;
+  if (!commit && (parsed < MIN_HANDLE_COUNT || parsed > MAX_HANDLE_COUNT)) return;
+  const count = Math.max(MIN_HANDLE_COUNT, Math.min(MAX_HANDLE_COUNT, Math.round(parsed)));
+  state.handleCount = count;
+  if (commit) $("#handle-count").value = String(count);
+  drawGeometry();
+}
+
 function wireEvents() {
   $("#mesh-button").addEventListener("click", generateMesh); $("#predict-button").addEventListener("click", runPrediction); $("#recover-button").addEventListener("click", runRecovery); $("#reference-button").addEventListener("click", runReference);
   $("#cancel-job").addEventListener("click", cancelActiveJob);
   $$(".mode-tab").forEach((button) => button.addEventListener("click", () => activateMode(button.dataset.mode)));
   $("#airfoil-search").addEventListener("input", renderAirfoilOptions);
   $("#airfoil-preset").addEventListener("change", (event) => selectExistingAirfoil(event.target.value));
-  $("#handle-count").addEventListener("input", (event) => { state.handleCount = Number(event.target.value); drawGeometry(); });
+  $("#handle-count").addEventListener("input", (event) => updateHandleCount(event.target.value));
+  $("#handle-count").addEventListener("change", (event) => updateHandleCount(event.target.value, { commit: true }));
   $("#reset-geometry").addEventListener("click", () => {
     const baseGeometry = state.uploadedGeometry || state.existingGeometry;
     if (!baseGeometry) return;
+    state.handleCount = DEFAULT_HANDLE_COUNT;
+    $("#handle-count").value = String(DEFAULT_HANDLE_COUNT);
     state.customGeometry = clone(baseGeometry);
     activateMode("custom", { loadGeometry: false });
     setGeometry(baseGeometry);

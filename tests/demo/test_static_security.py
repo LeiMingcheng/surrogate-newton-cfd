@@ -23,6 +23,8 @@ class DemoStaticSecurityTests(unittest.TestCase):
         self.assertNotIn("work ceiling", public_copy)
         self.assertNotIn("wall-time limit", public_copy)
         self.assertNotIn("ADFLOW work / ceiling", public_copy)
+        self.assertIn("MAX_HANDLE_COUNT = 16", script)
+        self.assertIn("state.handleCount = DEFAULT_HANDLE_COUNT", script)
 
     def test_public_demo_has_no_private_runtime_paths_or_credentials(self) -> None:
         forbidden = (
