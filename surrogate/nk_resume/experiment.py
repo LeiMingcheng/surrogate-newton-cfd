@@ -14,6 +14,7 @@ from NK_resume import (
     ManifestRunResult,
     NKWorkPlan,
     ResumeCase,
+    ResumeMode,
     SolverPreset,
     create_pipeline,
     finalonly_plan,
@@ -113,8 +114,14 @@ class FinalOnlyExperimentRequest:
     ranks_per_case: int = 8
     mpi_launcher: str = "auto"
     mpi_omp_threads: int = 1
-    solver_preset: str = "nk"
-    fixed_cycles: int = 5
+    resume_mode: str = ResumeMode.ANK_NK.value
+    max_work: int = 2000
+    time_limit_s: float = 10.0
+    nk_switch_tolerance: float = 1.0e-4
+    repeated_nk_cycles: tuple[int, ...] = (6, 8, 10)
+    # Compatibility fields for older Python callers.
+    solver_preset: str | None = None
+    fixed_cycles: int | None = None
     l2conv: float = 1.0e-8
     executor: str = "export"
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -128,10 +135,42 @@ class FinalOnlyExperimentRequest:
         executor = str(self.executor).strip().lower()
         if executor not in {"export", "sequential", "pools"}:
             raise ContractError("executor must be one of: export, sequential, pools")
-        if int(self.fixed_cycles) <= 0:
-            raise ContractError("fixed_cycles must be positive")
+        mode = ResumeMode(self.resume_mode)
+        repeated_nk_cycles = _int_tuple(self.repeated_nk_cycles)
+        if self.solver_preset is not None:
+            preset = SolverPreset(self.solver_preset)
+            if preset in {SolverPreset.NK, SolverPreset.PROD}:
+                mode = (
+                    ResumeMode.ANK_NK
+                    if preset == SolverPreset.PROD
+                    else ResumeMode.REPEATED_NK
+                )
+        elif self.fixed_cycles is not None:
+            mode = ResumeMode.REPEATED_NK
+        max_work = int(self.max_work if self.fixed_cycles is None else self.fixed_cycles)
+        if max_work <= 0:
+            raise ContractError("max_work must be positive")
+        time_limit_s = float(self.time_limit_s)
+        if time_limit_s <= 0.0:
+            raise ContractError("time_limit_s must be positive")
+        l2conv = float(self.l2conv)
+        if l2conv <= 0.0:
+            raise ContractError("l2conv must be positive")
+        nk_switch_tolerance = float(self.nk_switch_tolerance)
+        if nk_switch_tolerance <= 0.0:
+            raise ContractError("nk_switch_tolerance must be positive")
+        if mode == ResumeMode.REPEATED_NK and self.fixed_cycles is not None:
+            repeated_nk_cycles = (int(self.fixed_cycles),)
+        if not repeated_nk_cycles or min(repeated_nk_cycles) <= 0:
+            raise ContractError("repeated_nk_cycles must contain positive values")
         object.__setattr__(self, "ordinals", ordinals)
         object.__setattr__(self, "custom_timesteps", _int_tuple(self.custom_timesteps))
+        object.__setattr__(self, "resume_mode", mode.value)
+        object.__setattr__(self, "max_work", max_work)
+        object.__setattr__(self, "time_limit_s", time_limit_s)
+        object.__setattr__(self, "nk_switch_tolerance", nk_switch_tolerance)
+        object.__setattr__(self, "l2conv", l2conv)
+        object.__setattr__(self, "repeated_nk_cycles", repeated_nk_cycles)
         object.__setattr__(self, "executor", executor)
         object.__setattr__(self, "metadata", _metadata(self.metadata))
 
@@ -198,13 +237,28 @@ def run_finalonly_experiment(request: FinalOnlyExperimentRequest) -> FinalOnlyEx
     if not cases:
         raise ContractError("final-only experiment collected no cases")
     predictor_kind = _predictor_kind(cases, request.predictor_kind)
-    plan = finalonly_plan(
-        predictor_kind,
-        work=NKWorkPlan.fixed(
-            int(request.fixed_cycles),
-            solver_preset=SolverPreset(request.solver_preset),
-        ),
+    compatibility_preset = (
+        None
+        if request.solver_preset is None
+        else SolverPreset(request.solver_preset)
     )
+    if compatibility_preset not in {None, SolverPreset.NK, SolverPreset.PROD}:
+        work = NKWorkPlan.fixed(
+            request.max_work,
+            solver_preset=compatibility_preset,
+        )
+    elif request.resume_mode == ResumeMode.ANK_NK.value:
+        work = NKWorkPlan.ank_nk(
+            max_work=request.max_work,
+            time_limit_s=request.time_limit_s,
+            nk_switch_tolerance=request.nk_switch_tolerance,
+        )
+    else:
+        work = NKWorkPlan.repeated_nk(
+            request.repeated_nk_cycles,
+            threshold=request.l2conv,
+        )
+    plan = finalonly_plan(predictor_kind, work=work)
     export_result = create_pipeline().export_cases(
         cases,
         plan,
@@ -234,8 +288,12 @@ def run_finalonly_experiment(request: FinalOnlyExperimentRequest) -> FinalOnlyEx
             "config_path": str(request.config_path),
             "checkpoint_path": "" if request.checkpoint_path is None else str(request.checkpoint_path),
             "device": request.device,
-            "solver_preset": str(request.solver_preset),
-            "fixed_cycles": int(request.fixed_cycles),
+            "resume_mode": (
+                None if work.resume_mode is None else work.resume_mode.value
+            ),
+            "max_work": int(request.max_work),
+            "nk_switch_tolerance": float(request.nk_switch_tolerance),
+            "repeated_nk_cycles": list(request.repeated_nk_cycles),
         },
     )
     payload = {
@@ -263,8 +321,12 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--noise-mode", default="zeros")
     parser.add_argument("--cgns-root", default="")
     parser.add_argument("--ranks-per-case", type=int, default=8)
-    parser.add_argument("--solver-preset", choices=("none", "nk", "prod", "pseudo"), default="nk")
-    parser.add_argument("--fixed-cycles", type=int, default=5)
+    parser.add_argument("--resume-mode", choices=("ank_nk", "repeated_nk"), default="ank_nk")
+    parser.add_argument("--max-work", type=int, default=2000)
+    parser.add_argument("--time-limit-s", type=float, default=10.0)
+    parser.add_argument("--nk-switch-tol", type=float, default=1.0e-4)
+    parser.add_argument("--l2conv", type=float, default=1.0e-8)
+    parser.add_argument("--repeated-nk-cycles", default="6,8,10")
     parser.add_argument("--executor", choices=("export", "sequential", "pools"), default="export")
     return parser
 
@@ -293,8 +355,16 @@ def main(argv: list[str] | None = None) -> int:
             noise_mode=args.noise_mode,
             cgns_root=args.cgns_root,
             ranks_per_case=int(args.ranks_per_case),
-            solver_preset=args.solver_preset,
-            fixed_cycles=int(args.fixed_cycles),
+            resume_mode=args.resume_mode,
+            max_work=int(args.max_work),
+            time_limit_s=float(args.time_limit_s),
+            nk_switch_tolerance=float(args.nk_switch_tol),
+            l2conv=float(args.l2conv),
+            repeated_nk_cycles=tuple(
+                int(item.strip())
+                for item in args.repeated_nk_cycles.split(",")
+                if item.strip()
+            ),
             executor=args.executor,
         )
     )

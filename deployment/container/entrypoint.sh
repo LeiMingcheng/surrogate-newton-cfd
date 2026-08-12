@@ -32,6 +32,7 @@ case "${1:-}" in
         python "$repo_root/deployment/run.py" \
             --checkpoint "$checkpoint" \
             --stats "$stats" \
+            --resume-mode repeated_nk \
             --output-dir "$result_dir"
         python "$repo_root/deployment/smoke_check.py" \
             --level result \

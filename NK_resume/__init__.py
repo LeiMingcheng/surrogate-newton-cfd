@@ -65,6 +65,7 @@ from .plans import (
     NKWorkPlan,
     PlanKind,
     PredictorKind,
+    ResumeMode,
     ResumePlan,
     StagePlan,
     SolverPreset,
@@ -73,6 +74,7 @@ from .plans import (
     resume_plan_from_dict,
 )
 from .schema import (
+    FixedLiftContext,
     GeometryContext,
     GroundTruth,
     ModelInputs,
@@ -110,6 +112,7 @@ __all__ = [
     "CyclePolicy",
     "ExportResult",
     "FIELD_METRICS_SCHEMA",
+    "FixedLiftContext",
     "FORCE_METRICS_SCHEMA",
     "GeometryContext",
     "GroundTruth",
@@ -142,6 +145,7 @@ __all__ = [
     "ReplayService",
     "ResidentWarmPoolController",
     "ResumeCase",
+    "ResumeMode",
     "ResumePlan",
     "RuntimeState",
     "SOLVER_OPTIONS_SCHEMA",

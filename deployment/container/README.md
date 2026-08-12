@@ -224,9 +224,11 @@ docker compose -f compose.smoke.yaml up --build --abort-on-container-exit
 
 The command runs the RAE2822 mesh, surrogate, and ADflow correction workflow,
 then applies both the structural smoke check and the tolerances in
-`deployment/acceptance/rae2822-baseline.json`. Runtime output is stored in the
-named `rae2822-runtime` volume. The model directory remains read-only and is
-never copied into the image.
+`deployment/acceptance/rae2822-baseline.json`. That acceptance entrypoint
+selects `repeated_nk` because the recorded numerical baseline uses that mode;
+ordinary deployment configuration defaults to `ank_nk`. Runtime output is
+stored in the named `rae2822-runtime` volume. The model directory remains
+read-only and is never copied into the image.
 
 ## Native/HPC boundary
 

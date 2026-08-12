@@ -15,15 +15,20 @@
     "model_key": "fsb_dit"
   },
   "nk": {
+    "resume_mode": "ank_nk",
+    "max_work_per_flow_solve": 1000,
+    "max_aoa_solves": 5,
+    "total_time_limit_s": 30.0,
     "selection": "topk",
     "top_k": 1,
     "coupling": "sync",
     "ranks_per_case": 8,
     "pool_count": 3,
     "mpi_launcher": "auto",
-    "adaptive_cycles": [6, 8, 10],
+    "repeated_nk_cycles": [6, 8, 10],
     "residual_tolerance": 1e-8,
-    "cl_tolerance": 0.006,
+    "nk_switch_tolerance": 1e-4,
+    "cl_tolerance": 0.01,
     "max_corrections": 3,
     "options_version": 2
   },

@@ -105,20 +105,17 @@ def validate_job_payload(action: str, payload: dict[str, Any]) -> dict[str, Any]
         raise ValueError("case_id is invalid.")
     normalized = {"case_id": case_id}
     if action == "recover":
-        normalized.update(
-            {
-                "cycles": _require_number(
-                    payload, "cycles", minimum=1, maximum=20, integer=True, default=6
-                ),
-                "residual_exponent": _require_number(
-                    payload,
-                    "residual_exponent",
-                    minimum=2,
-                    maximum=12,
-                    integer=True,
-                    default=8,
-                ),
-            }
+        if "cycles" in payload:
+            raise ValueError(
+                "ANK-to-NK work is fixed by the server; cycles is not configurable."
+            )
+        normalized["residual_exponent"] = _require_number(
+            payload,
+            "residual_exponent",
+            minimum=4,
+            maximum=10,
+            integer=True,
+            default=6,
         )
     else:
         normalized["max_cycles"] = _require_number(

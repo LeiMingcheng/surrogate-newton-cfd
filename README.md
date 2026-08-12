@@ -121,8 +121,10 @@ python deployment/run.py \
 
 This launches the local surrogate service, builds the RAE2822 authority mesh,
 predicts a five-channel physical flow field, and runs terminal Newton
-correction through ADflow. Detailed prerequisites and outputs are documented in
-[deployment/README.md](deployment/README.md).
+correction through ADflow. Terminal correction has two modes: `ank_nk` is the
+default uninterrupted ADflow ANK-to-NK solve, while `repeated_nk` is the
+explicit cumulative Direct-NK controller. Detailed prerequisites and outputs
+are documented in [deployment/README.md](deployment/README.md).
 
 For internal interactive use, mount the optional external UIUC asset library
 and start the loopback Web application:
@@ -136,11 +138,17 @@ export DEMO_AIRFOIL_LIBRARY_ROOT=/path/to/demo-assets-uiuc-v1/uiuc
 
 See [the demo guide](demo/README.md) for configuration and SSH tunnelling.
 
-Compare a completed run with the sanitized aerolab3 baseline using:
+The included sanitized aerolab3 numerical baseline records `repeated_nk`.
+Reproduce that explicit mode and compare it using:
 
 ```bash
+python deployment/run.py \
+  --checkpoint artifacts/fsb-dit-airfoil-2608.04400-inference.pt \
+  --stats artifacts/turbulent-scale-stats.json \
+  --resume-mode repeated_nk \
+  --output-dir outputs/rae2822-repeated
 python deployment/compare_acceptance.py \
-  --result-dir outputs/rae2822 \
+  --result-dir outputs/rae2822-repeated \
   --baseline deployment/acceptance/rae2822-baseline.json
 ```
 

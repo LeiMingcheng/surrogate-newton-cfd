@@ -59,6 +59,9 @@ GAMMA = 1.4
 EDITOR_POINTS = 241
 MAX_UPLOAD_BYTES = 2_000_000
 MAX_COORDINATE_POINTS = 20_000
+DEMO_ANK_NK_MAX_WORK = 1000
+DEMO_ANK_NK_TIME_LIMIT_S = 10.0
+DEMO_ANK_NK_SWITCH_TOL = 1.0e-4
 FIXED_TRAILING_EDGE_THICKNESS = 0.002
 CP_PLOT_X_MAX = 0.999
 UIUC_CATALOG_URL = "https://m-selig.ae.illinois.edu/ads/coord_database.html"
@@ -964,9 +967,10 @@ class DemoEngine:
         )[0].numpy()
         plan = finalonly_plan(
             "fsb",
-            work=NKWorkPlan.fixed(
-                1,
-                solver_preset=SolverPreset.NK,
+            work=NKWorkPlan.ank_nk(
+                max_work=DEMO_ANK_NK_MAX_WORK,
+                time_limit_s=DEMO_ANK_NK_TIME_LIMIT_S,
+                nk_switch_tolerance=DEMO_ANK_NK_SWITCH_TOL,
             ),
         )
         authority_path = Path(str(prepared.metadata["authority_cgns_path"]))
@@ -985,7 +989,7 @@ class DemoEngine:
             mpi_launcher=self.mpi_launcher,
             mpi_omp_threads=1,
             options_version=2,
-            l2conv=1.0e-8,
+            l2conv=1.0e-6,
             output_dir=warm_root / "case",
             created_by="surrogate_newton_demo_solver_prepare",
             config_path=self.model_config,
@@ -1055,24 +1059,20 @@ class DemoEngine:
         self,
         case_id: str,
         *,
-        cycles: int = 6,
-        residual_exponent: int = 8,
+        residual_exponent: int = 6,
     ) -> dict[str, Any]:
-        if cycles < 1 or cycles > 20:
-            raise ValueError("Maximum terminal NK cycles must be between 1 and 20.")
-        if residual_exponent < 2 or residual_exponent > 12:
-            raise ValueError("NK stopping exponent must be between 2 and 12.")
+        if residual_exponent < 4 or residual_exponent > 10:
+            raise ValueError("ANK-to-NK stopping exponent must be between 4 and 10.")
         residual_threshold = 10.0 ** (-int(residual_exponent))
         case_dir = self._case_dir(case_id)
         with np.load(case_dir / "surrogate_state.npz", allow_pickle=False) as data:
             arrays = {key: np.asarray(data[key]) for key in data.files}
         plan = finalonly_plan(
             "fsb",
-            work=NKWorkPlan.adaptive(
-                range(1, int(cycles) + 1),
-                threshold=residual_threshold,
-                name="demo_terminal_nk",
-                solver_preset=SolverPreset.NK,
+            work=NKWorkPlan.ank_nk(
+                max_work=DEMO_ANK_NK_MAX_WORK,
+                time_limit_s=DEMO_ANK_NK_TIME_LIMIT_S,
+                nk_switch_tolerance=DEMO_ANK_NK_SWITCH_TOL,
             ),
         )
         run_root = case_dir / "solver_runs" / f"terminal_nk_{_utc_stamp()}"
@@ -1083,6 +1083,8 @@ class DemoEngine:
             initial_field=arrays["fields"],
             plan=plan,
             created_by="surrogate_newton_demo_terminal_nk",
+            result_kind="recovery",
+            l2conv=residual_threshold,
         )
         summary = self._load_case_summary(case_id)
         result["correction_mse"] = float(
@@ -1136,6 +1138,7 @@ class DemoEngine:
             initial_field=uniform,
             plan=plan,
             created_by="surrogate_newton_demo_cold_start",
+            result_kind="reference",
         )
         reference_field = result.pop("_field")
         summary = self._load_case_summary(case_id)
@@ -1178,6 +1181,8 @@ class DemoEngine:
         initial_field: np.ndarray,
         plan: Any,
         created_by: str,
+        result_kind: str,
+        l2conv: float = 1.0e-8,
     ) -> dict[str, Any]:
         summary = self._load_case_summary(case_id)
         cgns_path = Path(summary["authority_cgns_path"])
@@ -1196,7 +1201,7 @@ class DemoEngine:
             mpi_launcher=self.mpi_launcher,
             mpi_omp_threads=1,
             options_version=2,
-            l2conv=1.0e-8,
+            l2conv=float(l2conv),
             output_dir=run_root / "case",
             created_by=created_by,
             config_path=self.model_config,
@@ -1228,41 +1233,28 @@ class DemoEngine:
         )
         residual_final = (residual.get("summary") or {}).get("final")
         residual_threshold = residual.get("threshold")
-        converged = (
-            residual_kind == "ratio_to_reference_totalr0"
-            and residual_final is not None
-            and residual_threshold is not None
-            and float(residual_final) <= float(residual_threshold)
-        )
+        solver_work = dict(metrics.get("solver_work") or {})
+        converged = solver_work.get("termination") == "converged"
         view = _pressure_view(
             field,
             arrays["coords"],
             arrays["coords_vertex"],
             mach=float(flow[0]),
         )
-        work = plan.final_stage.work
-        cycle_limit = (
-            int(work.fixed_cycles)
-            if int(work.fixed_cycles) > 0
-            else int(work.adaptive_schedule.cumulative_cycles[-1])
-        )
         residual_budgets = [int(value) for value in residual.get("budgets", [])]
-        is_nk = plan.final_stage.work.solver_preset == SolverPreset.NK
-        executed_cycles = residual_budgets[-1] if is_nk else None
+        is_recovery = result_kind == "recovery"
         return {
-            "key": "recovery"
-            if is_nk
-            else "reference",
-            "label": f"Surrogate + NK (max {cycle_limit})"
-            if is_nk
+            "key": result_kind,
+            "label": "Surrogate + ANK→NK"
+            if is_recovery
             else "Cold-start ADflow reference",
             "status": "complete",
             "converged": converged,
-            "cycle_limit": cycle_limit,
-            "executed_cycles": executed_cycles,
-            "stopped_early": bool(
-                is_nk and converged and executed_cycles < cycle_limit
-            ),
+            "resume_mode": "ank_nk" if is_recovery else "cold_start",
+            "max_work": int(plan.final_stage.work.fixed_cycles),
+            "time_limit_s": plan.final_stage.work.time_limit_s,
+            "approx_total_its": solver_work.get("approx_total_its"),
+            "termination": solver_work.get("termination"),
             "forces": {
                 key: float(force[key])
                 for key in ("cl", "cd", "cm")

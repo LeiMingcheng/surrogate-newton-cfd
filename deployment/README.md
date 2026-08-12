@@ -4,7 +4,7 @@ This directory is the single maintained example and lightweight test surface
 for the first release. `run.py` executes the real two-dimensional workflow:
 
 ```text
-RAE2822 CST -> pyHyp CGNS -> FSB-DiT service -> physical field -> ADflow NK
+RAE2822 CST -> pyHyp CGNS -> FSB-DiT service -> physical field -> ADflow ANK-to-NK
 ```
 
 ## Prerequisites
@@ -44,6 +44,16 @@ compact `summary.json`. Use `--surrogate-only` to verify model and mesh serving
 without launching ADflow; this is a diagnostic subset, not the complete
 deployment result.
 
+Terminal correction supports two modes. `ank_nk` is selected by default and
+runs one uninterrupted production ADflow solve with the work ceiling in
+`newton.max_work`, wall-time ceiling in `newton.time_limit_s`, and ANK-to-NK
+transition threshold in `newton.nk_switch_tolerance`. The supplied defaults are
+2000 work units, 10 s, and `1e-4`, respectively; the residual target remains
+`1e-8`. `repeated_nk` runs the cumulative Direct-NK schedule in
+`newton.repeated_nk_cycles`. Select that mode explicitly with
+`--resume-mode repeated_nk`; residual and work metadata identify the selected
+mode in every result.
+
 Validate the completed output schema, mesh and field shapes, finite forces,
 and strict residual decrease with:
 
@@ -57,12 +67,17 @@ python deployment/smoke_check.py \
   --result-dir outputs/rae2822
 ```
 
-For release and container acceptance, follow the structural check with the
-sanitized aerolab3 numerical baseline:
+The sanitized aerolab3 numerical baseline records `repeated_nk`. Generate the
+matching result explicitly before the comparison:
 
 ```bash
+python deployment/run.py \
+  --checkpoint artifacts/fsb-dit-airfoil-2608.04400-inference.pt \
+  --stats artifacts/turbulent-scale-stats.json \
+  --resume-mode repeated_nk \
+  --output-dir outputs/rae2822-repeated
 python deployment/compare_acceptance.py \
-  --result-dir outputs/rae2822 \
+  --result-dir outputs/rae2822-repeated \
   --baseline deployment/acceptance/rae2822-baseline.json
 ```
 
@@ -72,7 +87,7 @@ allows a bounded cross-machine change in the pre-NK residual, and still
 requires the configured final residual threshold. Recorded timing is
 informational because it is hardware-dependent.
 
-`config.yaml` controls the flow condition, inference schedule, and solver
-budget. Paths to released model artifacts remain explicit command-line inputs
-so the example never silently selects an unrelated checkpoint or statistics
-file.
+`config.yaml` controls the flow condition, inference schedule, mode-specific
+solver work, and residual threshold. Paths to released model artifacts remain
+explicit command-line inputs so the example never silently selects an
+unrelated checkpoint or statistics file.

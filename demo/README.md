@@ -178,6 +178,15 @@ call cannot be interrupted safely, so cancellation becomes effective after the
 current engine call returns. Jobs left in `running` by a restart are marked
 failed, while queued jobs remain eligible for execution.
 
+The interactive `recover` action uses `ank_nk` with a server-fixed work ceiling
+of 1000 and a 10 s wall-time limit. The browser exposes only the residual
+stopping exponent (4 through 10) and defaults to `p=6` (`1e-6`) to reduce
+server load; this Demo-specific residual default does not change the library
+default of `1e-8`. The browser cannot replace either server ceiling with a
+repeated-cycle count. The core
+library and deployment workflow also expose `repeated_nk`, but the demo keeps a
+single fixed policy so comparisons across browser sessions are meaningful.
+
 The legacy `POST /api/mesh`, `POST /api/predict`, and case action routes remain
 available as enqueue-only compatibility endpoints and return HTTP 202 with a
 job descriptor; they no longer execute work in the HTTP request thread.
