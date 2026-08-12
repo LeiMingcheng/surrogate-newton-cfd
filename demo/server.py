@@ -50,6 +50,7 @@ STATIC_ROUTES = {
             "fig3_c_ellipse_pressure_recovery",
             "fig5_a_optimization_curves_2x2_nk",
             "fig6_a_geometry_ood",
+            "fig6_c_surface_cp_recovery",
             "fig6_d_pressure_flow_recovery",
         )
     },
@@ -63,6 +64,7 @@ STATIC_ROUTES = {
             "fig3_c_ellipse_pressure_recovery",
             "fig5_a_optimization_curves_2x2_nk",
             "fig6_a_geometry_ood",
+            "fig6_c_surface_cp_recovery",
             "fig6_d_pressure_flow_recovery",
         )
     },

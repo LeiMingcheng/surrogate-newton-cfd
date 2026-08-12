@@ -247,6 +247,7 @@ class DemoApiTests(unittest.TestCase):
             "/assets/figures/fig3_c_ellipse_pressure_recovery.png",
             "/assets/figures/fig5_a_optimization_curves_2x2_nk.png",
             "/assets/figures/fig6_a_geometry_ood.png",
+            "/assets/figures/fig6_c_surface_cp_recovery.png",
             "/assets/figures/fig6_d_pressure_flow_recovery.png",
             "/assets/figure-sources/fig1_workflow.pdf",
             "/assets/figure-sources/fig2_a_dataset_geometries.pdf",
@@ -255,6 +256,7 @@ class DemoApiTests(unittest.TestCase):
             "/assets/figure-sources/fig3_c_ellipse_pressure_recovery.pdf",
             "/assets/figure-sources/fig5_a_optimization_curves_2x2_nk.pdf",
             "/assets/figure-sources/fig6_a_geometry_ood.pdf",
+            "/assets/figure-sources/fig6_c_surface_cp_recovery.pdf",
             "/assets/figure-sources/fig6_d_pressure_flow_recovery.pdf",
         )
         for route in routes:

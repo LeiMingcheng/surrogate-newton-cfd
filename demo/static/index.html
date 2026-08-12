@@ -58,29 +58,24 @@
 
       <section class="paper-section page-width" id="method">
         <h2>Method</h2>
-        <div class="method-grid">
-          <div class="method-copy">
-            <h3>Prediction supplies structure; the solver supplies acceptance.</h3>
-            <p>
-              Geometry and flow conditions are mapped to a complete steady-flow prediction. Instead of accepting that prediction directly, we inject it into the target CFD discretization and evaluate the native nonlinear residual.
-            </p>
-            <p>
-              Jacobian-free Newton-Krylov updates solve the local correction equation <span class="equation">JΔU = -R</span>. The corrected state is accepted only when the prescribed residual threshold is reached. This separates fast learned initialization from numerical certification.
-            </p>
+        <div class="method-intro">
+          <h3>Prediction supplies structure; the solver supplies acceptance.</h3>
+          <p>
+            Geometry and flow conditions are first mapped to a complete steady-flow state. That prediction is then injected into the target CFD discretization and corrected until its native nonlinear residual satisfies the prescribed tolerance.
+          </p>
+        </div>
+        <div class="method-process" aria-label="Solver-coupled correction path">
+          <ol class="method-sequence">
+            <li><span class="step-index">01</span><strong>Predict</strong><small>Infer the full flow and turbulence state.</small></li>
+            <li><span class="step-index">02</span><strong>Evaluate</strong><small>Measure the native discrete residual.</small></li>
+            <li><span class="step-index">03</span><strong>Correct</strong><small>Apply Jacobian-free Newton–Krylov updates.</small></li>
+            <li><span class="step-index">04</span><strong>Accept</strong><small>Stop at the target solver tolerance.</small></li>
+          </ol>
+          <div class="method-formulation" aria-label="Method equations">
+            <p><span>Surrogate initialization</span><code>Û = S(G, θ)</code></p>
+            <p><span>Local correction</span><code>J(U<sup>k</sup>)ΔU = −R(U<sup>k</sup>)</code></p>
+            <p class="acceptance-rule"><span>Numerical acceptance</span><code>‖R(U<sub>NK</sub>)‖ ≤ ε</code></p>
           </div>
-          <aside class="solver-card" aria-label="Solver-coupled correction path">
-            <div class="solver-card-head">
-              <span>Solver-coupled path</span>
-              <strong>Û <i aria-hidden="true">→</i> U<sub>NK</sub></strong>
-            </div>
-            <ol class="method-sequence">
-              <li><span class="step-index">01</span><div><strong>Predict</strong><small>Full flow and turbulence state from geometry and conditions.</small></div></li>
-              <li><span class="step-index">02</span><div><strong>Evaluate</strong><small>Measure the native discrete residual on the target mesh.</small></div></li>
-              <li><span class="step-index">03</span><div><strong>Correct</strong><small>Apply Jacobian-free Newton-Krylov updates.</small></div></li>
-              <li><span class="step-index">04</span><div><strong>Accept</strong><small>Stop only when the solver tolerance is satisfied.</small></div></li>
-            </ol>
-            <p class="acceptance-rule"><span aria-hidden="true">✓</span><strong>Acceptance rule</strong><code>‖R(U<sub>NK</sub>)‖ ≤ ε</code></p>
-          </aside>
         </div>
       </section>
 
@@ -123,10 +118,10 @@
           </figure>
 
           <figure class="figure-panel result-row reverse">
-            <div class="result-image"><a class="figure-image-link" href="./assets/figure-sources/fig3_c_ellipse_pressure_recovery.pdf" aria-label="Open Figure 3c as a PDF"><img src="./assets/figures/fig3_c_ellipse_pressure_recovery.png" alt="Pressure fields and absolute errors along a geometry sequence from RAE2822 to an out-of-distribution ellipse" loading="lazy"></a></div>
+            <div class="result-image"><a class="figure-image-link" href="./assets/figures/fig3_c_ellipse_pressure_recovery.png" aria-label="Open the full-resolution Figure 3c PNG"><img src="./assets/figures/fig3_c_ellipse_pressure_recovery.png" alt="Pressure fields and absolute errors along a geometry sequence from RAE2822 to an out-of-distribution ellipse" loading="lazy"></a></div>
             <figcaption>
               <span class="figure-number">Result 2</span>
-              <strong>A representative sequence toward an OOD ellipse.</strong>
+              <strong>A representative geometry sequence into the OOD regime.</strong>
               From the reference RAE2822 airfoil toward a strongly shifted ellipse geometry, Newton-Krylov correction recovers the converged pressure structure and sharply reduces shock-related error.
             </figcaption>
           </figure>
@@ -153,7 +148,7 @@
         <div class="section-intro page-width inset">
           <h2>Extension to three-dimensional wings</h2>
           <p>
-            We further evaluate the same coupling principle on flying-wing configurations with planforms deliberately shifted beyond the training distribution. The surrogate reconstructs the global three-dimensional flow structure, while Newton-Krylov correction restores solver-consistent sectional pressure fields.
+            We further evaluate the same coupling principle on flying-wing configurations with planforms deliberately shifted beyond the training distribution. Full-wing surface fields show the recovered three-dimensional structure, while spanwise sections expose the corresponding pressure-field correction in detail.
           </p>
         </div>
         <div class="three-dimensional-grid">
@@ -162,8 +157,12 @@
             <figcaption><strong>(a) Controlled planform shift.</strong> Five OOD groups move systematically beyond the training and validation planform support.</figcaption>
           </figure>
           <figure class="figure-panel">
+            <a class="figure-image-link" href="./assets/figure-sources/fig6_c_surface_cp_recovery.pdf" aria-label="Open Figure 6c as a PDF"><img src="./assets/figures/fig6_c_surface_cp_recovery.png" alt="Full flying-wing surface pressure comparison and errors for CFD, surrogate prediction, and Newton-Krylov correction" loading="lazy"></a>
+            <figcaption><strong>(c) Three-dimensional surface recovery.</strong> Full-wing surface pressure maps show that NK15 restores the converged spatial structure and strongly suppresses the surrogate error.</figcaption>
+          </figure>
+          <figure class="figure-panel">
             <a class="figure-image-link" href="./assets/figure-sources/fig6_d_pressure_flow_recovery.pdf" aria-label="Open Figure 6d as a PDF"><img src="./assets/figures/fig6_d_pressure_flow_recovery.png" alt="Three flying-wing sectional pressure fields comparing CFD, surrogate prediction, Newton-Krylov correction, and their errors" loading="lazy"></a>
-            <figcaption><strong>(d) Three-dimensional flow recovery.</strong> At three spanwise sections, NK15 reduces the surrogate pressure-field error and recovers the converged CFD structure.</figcaption>
+            <figcaption><strong>(d) Spanwise pressure-field recovery.</strong> At three wing sections, NK15 reduces the surrogate pressure-field error and recovers the converged CFD structure.</figcaption>
           </figure>
         </div>
       </section>
