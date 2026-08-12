@@ -341,9 +341,7 @@ class JobSchedulerTests(unittest.TestCase):
             enforce_case_ownership=True,
         )
         scheduler.register_case("case_owned", "owner")
-        job = scheduler.submit(
-            "recover", {"case_id": "case_owned", "cycles": 2}, client_id="owner"
-        )
+        job = scheduler.submit("recover", {"case_id": "case_owned"}, client_id="owner")
         self.assertEqual(scheduler.get(job["job_id"], client_id="owner")["state"], "queued")
         with self.assertRaises(JobNotFoundError):
             scheduler.get(job["job_id"], client_id="other")

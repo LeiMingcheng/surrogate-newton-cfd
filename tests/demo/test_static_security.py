@@ -91,6 +91,7 @@ class DemoStaticSecurityTests(unittest.TestCase):
             content = html_path.read_text(encoding="utf-8")
             local_references = re.findall(r"(?:src|href)=\"(/[^\"#]+)\"", content)
             for route in local_references:
+                route = route.split("?", 1)[0]
                 if route in {"/", "/demo"}:
                     continue
                 with self.subTest(html=html_path.name, route=route):
