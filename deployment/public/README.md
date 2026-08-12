@@ -8,6 +8,18 @@ watchdog. If a native call exceeds its deadline, the app exits with code 70;
 Compose restarts it and startup recovery marks the interrupted job failed while
 preserving queued jobs.
 
+## Provider-limited HTTP preview
+
+If the hosting provider blocks inbound 80/443/8080, use
+`nginx-http-preview.conf` on TCP 8888 and set
+`DEMO_PUBLIC_ORIGIN=http://36.103.234.95:8888`. The Compose template explicitly
+sets `DEMO_ALLOW_INSECURE_PUBLIC_HTTP=1`, which removes only the `Secure` flag
+from the signed anonymous-session cookie so job ownership still works over
+HTTP. `HttpOnly` and `SameSite=Strict` remain enabled. Do not configure Basic
+Auth on this plaintext listener and do not accept confidential, proprietary,
+personal, or otherwise sensitive uploads. This is a preview fallback, not an
+equivalent replacement for HTTPS.
+
 The deployment is addressed directly as `https://36.103.234.95`; it does not
 depend on a purchased domain, an external wildcard-DNS service, an SSH tunnel,
 or the development Mac. Let's Encrypt IP-address certificates use the

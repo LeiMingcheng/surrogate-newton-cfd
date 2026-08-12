@@ -105,6 +105,46 @@ class DemoApiTests(unittest.TestCase):
         connection.close()
         return response.status, content_type, body
 
+    def session_cookie(self, *, secure: bool) -> str:
+        handler = type(
+            "SessionCookieDemoRequestHandler",
+            (DemoRequestHandler,),
+            {
+                "engine": self.engine,
+                "scheduler": self.scheduler,
+                "session_secret": b"s" * 48,
+                "enforce_session_ownership": True,
+                "secure_session_cookie": secure,
+                "public_origin": "https://example.invalid" if secure else "http://example.invalid:8888",
+            },
+        )
+        server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+        server.daemon_threads = True
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            connection = HTTPConnection("127.0.0.1", int(server.server_address[1]), timeout=10)
+            connection.request("GET", "/api/health/live")
+            response = connection.getresponse()
+            response.read()
+            cookie = response.getheader("Set-Cookie") or ""
+            connection.close()
+            return cookie
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+    def test_session_cookie_security_matches_transport(self) -> None:
+        https_cookie = self.session_cookie(secure=True)
+        http_cookie = self.session_cookie(secure=False)
+        self.assertIn("HttpOnly", https_cookie)
+        self.assertIn("SameSite=Strict", https_cookie)
+        self.assertIn("; Secure", https_cookie)
+        self.assertIn("HttpOnly", http_cookie)
+        self.assertIn("SameSite=Strict", http_cookie)
+        self.assertNotIn("; Secure", http_cookie)
+
     def test_status_and_presets_work_with_surrogate_offline(self) -> None:
         status_code, status = self.request("GET", "/api/status")
         self.assertEqual(status_code, 200)

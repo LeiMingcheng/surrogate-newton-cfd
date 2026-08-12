@@ -544,6 +544,15 @@ def build_parser() -> argparse.ArgumentParser:
         default=os.environ.get("DEMO_PUBLIC_MODE", "0") == "1",
     )
     parser.add_argument(
+        "--allow-insecure-public-http",
+        action="store_true",
+        default=os.environ.get("DEMO_ALLOW_INSECURE_PUBLIC_HTTP", "0") == "1",
+        help=(
+            "Allow public-mode session cookies over HTTP when the hosting provider "
+            "cannot expose HTTPS. This is an explicit preview-only downgrade."
+        ),
+    )
+    parser.add_argument(
         "--hard-timeout-exit",
         action="store_true",
         default=os.environ.get("DEMO_HARD_TIMEOUT_EXIT", "0") == "1",
@@ -570,6 +579,18 @@ def main() -> int:
             raise ValueError("The session secret file must contain at least 32 random bytes.")
     if args.public_mode and (session_secret is None or not args.public_origin):
         raise ValueError("Public mode requires a session secret file and DEMO_PUBLIC_ORIGIN.")
+    if args.allow_insecure_public_http and not args.public_mode:
+        raise ValueError("Insecure public HTTP is valid only together with public mode.")
+    if args.public_mode:
+        public_scheme = urlparse(args.public_origin).scheme.lower()
+        if args.allow_insecure_public_http:
+            if public_scheme != "http":
+                raise ValueError("Insecure public HTTP requires an http:// public origin.")
+        elif public_scheme != "https":
+            raise ValueError(
+                "Public mode requires an https:// origin unless the explicit "
+                "preview-only HTTP downgrade is enabled."
+            )
     engine_options: dict[str, Any] = {
         "runtime_root": args.runtime_root,
         "surrogate_host": args.surrogate_host,
@@ -654,7 +675,9 @@ def main() -> int:
                 "scheduler": scheduler,
                 "session_secret": session_secret,
                 "enforce_session_ownership": args.public_mode,
-                "secure_session_cookie": args.public_mode,
+                "secure_session_cookie": (
+                    args.public_mode and not args.allow_insecure_public_http
+                ),
                 "public_origin": args.public_origin if args.public_mode else None,
                 "rate_limiter": SlidingWindowRateLimiter() if args.public_mode else None,
             },
@@ -680,6 +703,7 @@ def main() -> int:
                     "cold_start_max_wait_sec": args.cold_start_max_wait_sec,
                     "max_pending_jobs": args.max_pending_jobs,
                     "public_mode": args.public_mode,
+                    "insecure_public_http": args.allow_insecure_public_http,
                     "hard_timeout_exit": args.hard_timeout_exit,
                     "prewarm": not args.skip_prewarm,
                 },

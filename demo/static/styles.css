@@ -648,6 +648,17 @@ select:disabled {
   font-size: 17px;
 }
 
+.demo-masthead > .transport-notice {
+  max-width: 830px;
+  margin-top: 18px;
+  padding: 11px 14px;
+  border-left: 3px solid #b36b2c;
+  color: #6f4a2b;
+  background: #fff6ea;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .runtime-status {
   position: absolute;
   top: 44px;
