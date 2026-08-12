@@ -7,7 +7,10 @@
   --accent: #2c5f93;
   --accent-dark: #1d446b;
   --paper: #ffffff;
-  font-family: Arial, "Helvetica Neue", sans-serif;
+  --body-font: "Noto Sans", "Helvetica Neue", Arial, sans-serif;
+  --heading-font: Georgia, "Times New Roman", serif;
+  --math-font: "STIX Two Math", "Cambria Math", Georgia, serif;
+  font-family: var(--body-font);
   font-synthesis: none;
 }
 
@@ -25,6 +28,8 @@ body {
   background: var(--paper);
   font-size: 16px;
   line-height: 1.65;
+  font-variant-numeric: lining-nums proportional-nums;
+  text-rendering: optimizeLegibility;
 }
 
 a {
@@ -85,7 +90,7 @@ h3 {
 
 h1 {
   margin: 0 auto;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--heading-font);
   font-size: clamp(35px, 5.2vw, 56px);
   font-weight: 500;
   letter-spacing: -0.025em;
@@ -254,9 +259,9 @@ h1 {
   max-width: 850px;
   margin: 22px auto 0;
   color: #303030;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: clamp(17px, 2.1vw, 21px);
-  line-height: 1.6;
+  font-family: var(--body-font);
+  font-size: 17px;
+  line-height: 1.7;
   text-align: center;
 }
 
@@ -266,7 +271,7 @@ h1 {
 
 .paper-section h2 {
   margin: 0 0 25px;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--heading-font);
   font-size: clamp(28px, 4vw, 38px);
   font-weight: 500;
   letter-spacing: -0.015em;
@@ -279,9 +284,9 @@ h1 {
 .method-intro p,
 .availability p {
   margin: 0 auto 17px;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 17px;
-  line-height: 1.75;
+  font-family: var(--body-font);
+  font-size: 16px;
+  line-height: 1.7;
 }
 
 .method-intro {
@@ -292,7 +297,7 @@ h1 {
 
 .method-intro h3 {
   margin: 0 0 14px;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--heading-font);
   font-size: 23px;
   font-weight: 600;
   line-height: 1.35;
@@ -338,21 +343,24 @@ h1 {
 
 .method-sequence .step-index {
   color: var(--accent);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
 }
 
 .method-sequence strong {
   color: #263746;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 18px;
+  font-family: var(--body-font);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
 .method-sequence small {
   color: var(--muted);
-  font-size: 12px;
-  line-height: 1.5;
+  font-family: var(--body-font);
+  font-size: 14px;
+  line-height: 1.55;
 }
 
 .method-formulation {
@@ -375,16 +383,18 @@ h1 {
 
 .method-formulation span {
   color: var(--muted);
-  font-size: 11px;
+  font-family: var(--body-font);
+  font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
 }
 
 .method-formulation code {
   color: #263746;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: var(--math-font);
   font-size: 15px;
+  font-variant-numeric: lining-nums;
   white-space: nowrap;
 }
 
@@ -435,13 +445,16 @@ h1 {
 .figure-panel figcaption {
   margin-top: 16px;
   color: var(--muted);
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 14px;
-  line-height: 1.55;
+  font-family: var(--body-font);
+  font-size: 15px;
+  line-height: 1.65;
+  font-variant-numeric: lining-nums proportional-nums;
 }
 
 .figure-panel figcaption strong {
   color: #333;
+  font-family: var(--body-font);
+  font-weight: 700;
 }
 
 .figure-wide {
@@ -475,21 +488,22 @@ h1 {
 .result-row figcaption {
   margin: 0;
   font-size: 15px;
+  line-height: 1.65;
 }
 
 .result-row figcaption strong {
   display: block;
   margin: 8px 0 10px;
-  font-size: 18px;
-  line-height: 1.4;
+  font-size: 16px;
+  line-height: 1.45;
 }
 
 .figure-number {
   color: var(--accent);
-  font-family: Arial, "Helvetica Neue", sans-serif;
-  font-size: 11px;
+  font-family: var(--body-font);
+  font-size: 12px;
   font-weight: 800;
-  letter-spacing: 0.09em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 
@@ -522,7 +536,7 @@ h1 {
 }
 
 .text-link {
-  font-family: Arial, "Helvetica Neue", sans-serif;
+  font-family: var(--body-font);
   font-size: 14px;
   font-weight: 700;
 }
