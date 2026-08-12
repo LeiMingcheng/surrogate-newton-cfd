@@ -132,6 +132,10 @@ h1 {
 }
 
 .resource-links a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
   min-width: 88px;
   padding: 8px 17px;
   border-radius: 999px;
@@ -141,6 +145,26 @@ h1 {
   font-weight: 700;
   text-decoration: none;
   transition: background 150ms ease, transform 150ms ease;
+}
+
+.resource-links a:last-child {
+  background: var(--accent-dark);
+}
+
+.button-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 15px;
+  color: #dce5ed;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.code-icon {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 9px;
+  letter-spacing: -0.12em;
 }
 
 .resource-links a:hover,
@@ -157,6 +181,17 @@ h1 {
 .teaser img {
   max-height: 610px;
   object-fit: contain;
+}
+
+.figure-image-link {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+}
+
+.figure-image-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
 }
 
 .lead-caption {
@@ -195,8 +230,8 @@ h1 {
 
 .method-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(270px, 0.75fr);
-  gap: 70px;
+  grid-template-columns: minmax(0, 1.05fr) minmax(330px, 0.95fr);
+  gap: 56px;
   align-items: start;
 }
 
@@ -216,16 +251,44 @@ h1 {
 .method-sequence {
   margin: 0;
   padding: 0;
-  border-top: 1px solid var(--line);
   list-style: none;
 }
 
 .method-sequence li {
   display: grid;
-  grid-template-columns: 90px 1fr;
-  gap: 12px;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--line);
+  grid-template-columns: 32px 1fr;
+  gap: 13px;
+  position: relative;
+  padding: 13px 0;
+}
+
+.method-sequence li:not(:last-child)::after {
+  position: absolute;
+  top: 43px;
+  bottom: -1px;
+  left: 15px;
+  width: 1px;
+  background: #cbd7e2;
+  content: "";
+}
+
+.method-sequence .step-index {
+  display: grid;
+  z-index: 1;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #b9c9d7;
+  border-radius: 50%;
+  color: var(--accent-dark);
+  background: #fff;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.method-sequence li div {
+  display: grid;
+  gap: 2px;
 }
 
 .method-sequence strong {
@@ -233,8 +296,86 @@ h1 {
   font-size: 14px;
 }
 
-.method-sequence span {
+.method-sequence small {
   color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.solver-card {
+  overflow: hidden;
+  border: 1px solid #cbd6e0;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #f5f8fb 0%, #fff 45%);
+  box-shadow: 0 14px 38px rgba(29, 68, 107, 0.08);
+}
+
+.solver-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px 20px;
+  border-bottom: 1px solid #d8e1e8;
+  color: var(--accent-dark);
+  background: #eaf1f7;
+}
+
+.solver-card-head span {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.solver-card-head strong {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.solver-card-head i {
+  padding-inline: 7px;
+  font-style: normal;
+}
+
+.solver-card .method-sequence {
+  padding: 7px 20px;
+}
+
+.acceptance-rule {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 1px 10px;
+  margin: 2px 20px 20px;
+  padding: 12px 13px;
+  border: 1px solid #c9ddcf;
+  border-radius: 9px;
+  background: #f2f8f3;
+}
+
+.acceptance-rule > span {
+  grid-row: 1 / 3;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  color: #fff;
+  background: #3e7a50;
+  font-size: 13px;
+}
+
+.acceptance-rule strong {
+  color: #345c40;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.acceptance-rule code {
+  color: #304d38;
+  font-family: Georgia, "Times New Roman", serif;
   font-size: 13px;
 }
 
@@ -338,6 +479,15 @@ h1 {
   grid-template-columns: 1fr;
 }
 
+.three-dimensional-grid {
+  display: grid;
+  gap: 28px;
+}
+
+.three-dimensional-grid .figure-panel:first-child img {
+  aspect-ratio: 4.73 / 1;
+}
+
 .availability {
   margin-top: clamp(76px, 10vw, 116px);
   padding: 42px 50px;
@@ -405,6 +555,10 @@ pre {
   .result-row.reverse {
     grid-template-columns: 1fr;
     gap: 28px;
+  }
+
+  .solver-card {
+    max-width: 430px;
   }
 
   .benchmark-grid .figure-panel img {
