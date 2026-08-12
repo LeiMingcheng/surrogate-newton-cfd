@@ -18,6 +18,8 @@ class DemoStaticSecurityTests(unittest.TestCase):
         script = (DEMO_ROOT / "static" / "app.js").read_text(encoding="utf-8")
         public_copy = html + script
         self.assertIn("Surrogate + NK convergence target", html)
+        self.assertIn("10^-p · fixed compute budget", html)
+        self.assertNotIn('class="target-value"', html)
         self.assertIn("fixed compute budget", public_copy)
         self.assertNotIn("ANK", public_copy)
         self.assertNotIn("work ceiling", public_copy)
@@ -25,6 +27,17 @@ class DemoStaticSecurityTests(unittest.TestCase):
         self.assertNotIn("ADFLOW work / ceiling", public_copy)
         self.assertIn("MAX_HANDLE_COUNT = 16", script)
         self.assertIn("state.handleCount = DEFAULT_HANDLE_COUNT", script)
+
+    def test_demo_flow_controls_match_the_public_operating_range(self) -> None:
+        html = (DEMO_ROOT / "static" / "demo.html").read_text(encoding="utf-8")
+        self.assertRegex(
+            html,
+            r'id="mach-range"[^>]+min="0\.4"[^>]+max="0\.8"',
+        )
+        self.assertRegex(
+            html,
+            r'id="aoa-range"[^>]+min="-2"[^>]+max="6"',
+        )
 
     def test_public_demo_has_no_private_runtime_paths_or_credentials(self) -> None:
         forbidden = (

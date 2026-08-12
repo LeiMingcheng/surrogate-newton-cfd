@@ -88,8 +88,8 @@ def validate_job_payload(action: str, payload: dict[str, Any]) -> dict[str, Any]
         if action == "predict":
             normalized.update(
                 {
-                    "mach": _require_number(payload, "mach", minimum=0.2, maximum=0.9),
-                    "aoa": _require_number(payload, "aoa", minimum=-5.0, maximum=10.0),
+                    "mach": _require_number(payload, "mach", minimum=0.4, maximum=0.8),
+                    "aoa": _require_number(payload, "aoa", minimum=-2.0, maximum=6.0),
                     "n_inference_steps": _require_number(
                         payload,
                         "n_inference_steps",

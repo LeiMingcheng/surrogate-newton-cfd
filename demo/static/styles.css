@@ -990,23 +990,26 @@ select:disabled {
   grid-template-columns: minmax(0, 1fr) 76px;
   align-items: center;
   gap: 12px;
-  min-height: 64px;
+  min-height: 48px;
   margin: 8px 0 0 !important;
-  padding: 11px 12px;
-  border: 1px solid var(--soft-line);
-  border-radius: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
   color: var(--ink);
-  background: #fff;
+  background: transparent;
   text-transform: none !important;
   letter-spacing: 0 !important;
   font-size: 13px !important;
-  font-weight: 700 !important;
+  font-weight: 400 !important;
 }
 
 .compact-control span,
-.compact-control strong,
 .compact-control small {
   display: block;
+}
+
+.compact-control input {
+  font-weight: 400;
 }
 
 .compact-control small {
@@ -1200,35 +1203,7 @@ select:disabled {
 }
 
 .nk-setting {
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.nk-setting strong {
-  display: block;
-}
-
-.target-value {
-  display: inline-flex;
-  align-items: baseline;
-  justify-content: flex-end;
-  color: var(--blue-dark);
-  font-family: Arial, "Helvetica Neue", sans-serif;
-  font-size: 18px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.target-value sup {
-  font-size: 12px;
-}
-
-.target-value input {
-  width: 54px;
-  margin-left: 2px;
-  color: var(--blue-dark);
-  font-size: 16px;
-  font-weight: 700;
-  text-align: center;
+  font-weight: 400;
 }
 
 .mesh-preparation {

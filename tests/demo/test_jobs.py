@@ -10,7 +10,13 @@ from contextlib import closing
 from pathlib import Path
 from typing import Any
 
-from demo.jobs import JobNotFoundError, JobScheduler, JobStateError, QueueCapacityError
+from demo.jobs import (
+    JobNotFoundError,
+    JobScheduler,
+    JobStateError,
+    QueueCapacityError,
+    validate_job_payload,
+)
 
 GEOMETRY27 = [0.0] * 27
 
@@ -329,6 +335,18 @@ class JobSchedulerTests(unittest.TestCase):
         for action, payload in invalid_payloads:
             with self.subTest(action=action), self.assertRaises(ValueError):
                 scheduler.submit(action, payload, client_id="client")
+
+    def test_predict_flow_range_accepts_boundaries_and_rejects_outside(self) -> None:
+        geometry = {"geometry27": GEOMETRY27, "name": "range", "n_inference_steps": 5}
+        for mach, aoa in ((0.4, -2.0), (0.8, 6.0)):
+            normalized = validate_job_payload(
+                "predict", {**geometry, "mach": mach, "aoa": aoa}
+            )
+            self.assertEqual(normalized["mach"], mach)
+            self.assertEqual(normalized["aoa"], aoa)
+        for mach, aoa in ((0.39, 0.0), (0.81, 0.0), (0.6, -2.1), (0.6, 6.1)):
+            with self.subTest(mach=mach, aoa=aoa), self.assertRaises(ValueError):
+                validate_job_payload("predict", {**geometry, "mach": mach, "aoa": aoa})
 
     def test_job_and_case_ownership_hide_other_sessions(self) -> None:
         engine = FakeEngine()

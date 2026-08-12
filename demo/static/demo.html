@@ -55,15 +55,15 @@
                 <p class="control-help">The example contains separate <code>zone upper</code> and <code>zone lower</code> x–y sections.</p>
               </div>
               <div class="mode-panel" data-panel="custom" hidden>
-                <label class="compact-control" for="handle-count"><span><strong>Internal drag points</strong><small>Per surface</small></span><input id="handle-count" type="number" min="3" max="16" step="1" value="6"></label>
+                <label class="compact-control" for="handle-count"><span>Internal drag points<small>Per surface</small></span><input id="handle-count" type="number" min="3" max="16" step="1" value="6"></label>
                 <p class="control-help">Cosine-spaced points deform the surface smoothly; the leading and trailing edges remain fixed.</p>
               </div>
             </div>
 
             <div class="control-group flow-controls">
               <span class="control-label">Flow condition</span>
-              <label class="range-control" for="mach-range"><span>Mach</span><input id="mach-range" type="range" min="0.2" max="0.9" step="0.01" value="0.74"><input id="mach" type="number" min="0.2" max="0.9" step="0.01" value="0.74"></label>
-              <label class="range-control" for="aoa-range"><span>Angle of attack (deg)</span><input id="aoa-range" type="range" min="-5" max="10" step="0.1" value="1.0"><input id="aoa" type="number" min="-5" max="10" step="0.1" value="1.0"></label>
+              <label class="range-control" for="mach-range"><span>Mach</span><input id="mach-range" type="range" min="0.4" max="0.8" step="0.01" value="0.74"><input id="mach" type="number" min="0.4" max="0.8" step="0.01" value="0.74"></label>
+              <label class="range-control" for="aoa-range"><span>Angle of attack (deg)</span><input id="aoa-range" type="range" min="-2" max="6" step="0.1" value="1.0"><input id="aoa" type="number" min="-2" max="6" step="0.1" value="1.0"></label>
               <div class="reference-state-readout" aria-label="Fixed thermodynamic reference state">
                 <span>Derived Reynolds number</span><strong id="reynolds-value">1.638 × 10<sup>7</sup></strong>
                 <small><i>T</i><sub>∞</sub> = 300 K · <i>p</i><sub>∞</sub> = 101325 Pa · <i>c</i> = 1 m · γ = 1.4</small>
@@ -92,7 +92,7 @@
           <div class="method-bar-heading"><strong>Method settings</strong><span>Set the prediction budget and NK target, then prepare the shared mesh.</span></div>
           <div class="method-setting-grid">
             <label class="horizontal-setting" for="surrogate-steps"><span>Surrogate steps<small>Default 5; 5–10 recommended</small></span><input id="surrogate-steps" type="number" min="1" max="20" step="1" value="5"></label>
-            <label class="horizontal-setting nk-setting" for="nk-stop-exponent"><span><strong>Surrogate + NK convergence target</strong><small>Residual L2 ratio · fixed compute budget</small></span><span class="target-value">10<sup>−</sup><input id="nk-stop-exponent" aria-label="Residual exponent" type="number" min="4" max="10" step="1" value="6"></span></label>
+            <label class="horizontal-setting nk-setting" for="nk-stop-exponent"><span>Surrogate + NK convergence target<small>10^-p · fixed compute budget</small></span><input id="nk-stop-exponent" aria-label="Exponent p" type="number" min="4" max="10" step="1" value="6"></label>
             <div class="mesh-preparation"><button id="mesh-button" class="action-button" disabled>Generate mesh</button><div id="mesh-status" class="mesh-status">Mesh not generated.</div></div>
           </div>
           <p id="case-message" class="case-message" role="status" aria-live="polite">Preparing the local workspace.</p>

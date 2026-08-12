@@ -843,10 +843,10 @@ class DemoEngine:
         n_inference_steps: int,
         name: str,
     ) -> dict[str, Any]:
-        if not 0.2 <= float(mach) <= 0.9:
-            raise ValueError("Mach must be between 0.2 and 0.9 for this model.")
-        if not -5.0 <= float(aoa) <= 10.0:
-            raise ValueError("Angle of attack must be between -5 and 10 degrees.")
+        if not 0.4 <= float(mach) <= 0.8:
+            raise ValueError("Mach must be between 0.4 and 0.8 for this model.")
+        if not -2.0 <= float(aoa) <= 6.0:
+            raise ValueError("Angle of attack must be between -2 and 6 degrees.")
         reference_state = reference_state_for_mach(mach)
         reynolds = reference_state["reynolds"]
         geometry = np.asarray(geometry27, dtype=np.float32).reshape(27)
