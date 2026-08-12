@@ -1,12 +1,13 @@
 {
   "schema_version": 1,
   "release": "model-2608.04400-inference-v1",
+  "license": "BSD-3-Clause",
   "paper": "https://arxiv.org/abs/2608.04400",
   "hosting": {
     "provider": "huggingface",
     "repository": "xzztj/surrogate-newton-cfd-fsb-dit-airfoil-inference",
-    "revision": "6593117f03876feb8a3da0e254f71caf7e6e7edc",
-    "base_url": "https://huggingface.co/xzztj/surrogate-newton-cfd-fsb-dit-airfoil-inference/resolve/6593117f03876feb8a3da0e254f71caf7e6e7edc"
+    "revision": "31ffab13a6ad1f95f32c79615e5213fe6c38023e",
+    "base_url": "https://huggingface.co/xzztj/surrogate-newton-cfd-fsb-dit-airfoil-inference/resolve/31ffab13a6ad1f95f32c79615e5213fe6c38023e"
   },
   "model": {
     "filename": "fsb-dit-airfoil-2608.04400-inference.pt",
