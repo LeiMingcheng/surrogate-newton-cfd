@@ -633,6 +633,8 @@ def main() -> int:
             nk_burst_limit=args.nk_burst_limit,
             cold_start_max_wait_sec=args.cold_start_max_wait_sec,
             case_root=engine.case_root,
+            mesh_root=engine.mesh_root,
+            solver_prepare_root=engine.runtime_root / "solver_prepare",
             case_ttl_sec=args.case_ttl_sec,
             enforce_case_ownership=args.public_mode,
             hard_timeout_handler=hard_timeout_exit if args.hard_timeout_exit else None,

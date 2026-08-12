@@ -8,6 +8,7 @@ import math
 import re
 import shutil
 import sqlite3
+import struct
 import threading
 import time
 import uuid
@@ -167,6 +168,8 @@ class JobScheduler:
         nk_burst_limit: int = 3,
         cold_start_max_wait_sec: float = 300.0,
         case_root: Path | None = None,
+        mesh_root: Path | None = None,
+        solver_prepare_root: Path | None = None,
         case_ttl_sec: float | None = None,
         enforce_case_ownership: bool = False,
         hard_timeout_handler: Callable[[dict[str, Any]], None] | None = None,
@@ -193,6 +196,14 @@ class JobScheduler:
         self.cold_start_max_wait_sec = float(cold_start_max_wait_sec)
         self.case_root = (
             None if case_root is None else Path(case_root).expanduser().resolve()
+        )
+        self.mesh_root = (
+            None if mesh_root is None else Path(mesh_root).expanduser().resolve()
+        )
+        self.solver_prepare_root = (
+            None
+            if solver_prepare_root is None
+            else Path(solver_prepare_root).expanduser().resolve()
         )
         self.case_ttl_sec = float(case_ttl_sec or result_ttl_sec)
         self.enforce_case_ownership = bool(enforce_case_ownership)
@@ -231,6 +242,10 @@ class JobScheduler:
         self.job_root.mkdir(parents=True, exist_ok=True)
         if self.case_root is not None:
             self.case_root.mkdir(parents=True, exist_ok=True)
+        if self.mesh_root is not None:
+            self.mesh_root.mkdir(parents=True, exist_ok=True)
+        if self.solver_prepare_root is not None:
+            self.solver_prepare_root.mkdir(parents=True, exist_ok=True)
         self._initialize_database()
         self._recover_interrupted_jobs()
         if autostart:
@@ -294,12 +309,22 @@ class JobScheduler:
                 CREATE TABLE IF NOT EXISTS cases (
                     case_id TEXT PRIMARY KEY,
                     client_id TEXT NOT NULL,
+                    geometry_key TEXT,
                     created_at REAL NOT NULL,
                     updated_at REAL NOT NULL,
                     expires_at REAL NOT NULL
                 );
                 CREATE INDEX IF NOT EXISTS cases_expiry
                     ON cases(expires_at);
+                CREATE TABLE IF NOT EXISTS geometries (
+                    geometry_key TEXT PRIMARY KEY,
+                    geometry_id TEXT NOT NULL,
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL,
+                    expires_at REAL NOT NULL
+                );
+                CREATE INDEX IF NOT EXISTS geometries_expiry
+                    ON geometries(expires_at);
                 """
             )
             columns = {
@@ -312,6 +337,12 @@ class JobScheduler:
                 )
             if "resource_key" not in columns:
                 connection.execute("ALTER TABLE jobs ADD COLUMN resource_key TEXT")
+            case_columns = {
+                str(row["name"])
+                for row in connection.execute("PRAGMA table_info(cases)").fetchall()
+            }
+            if "geometry_key" not in case_columns:
+                connection.execute("ALTER TABLE cases ADD COLUMN geometry_key TEXT")
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS jobs_running_resource "
                 "ON jobs(state, resource_key)"
@@ -373,10 +404,8 @@ class JobScheduler:
         if action in {"recover", "reference"}:
             resource_key = f"case:{normalized['case_id']}"
         else:
-            geometry_bytes = json.dumps(
-                normalized["geometry27"], separators=(",", ":"), allow_nan=False
-            ).encode("utf-8")
-            resource_key = f"geometry:{hashlib.sha256(geometry_bytes).hexdigest()}"
+            geometry_bytes = struct.pack("<27f", *normalized["geometry27"])
+            resource_key = f"geometry:{hashlib.sha256(geometry_bytes).hexdigest()[:12]}"
         now = self._clock()
         with self._connection() as connection:
             connection.execute("BEGIN IMMEDIATE")
@@ -530,6 +559,9 @@ class JobScheduler:
             ).fetchall()
             running_jobs = [dict(row) for row in running_rows]
             case_count = int(connection.execute("SELECT COUNT(*) FROM cases").fetchone()[0])
+            geometry_count = int(
+                connection.execute("SELECT COUNT(*) FROM geometries").fetchone()[0]
+            )
         return {
             "concurrency_limit": len(self.engines),
             "queue_depth": counts.get("queued", 0),
@@ -541,6 +573,7 @@ class JobScheduler:
             "result_ttl_sec": self.result_ttl_sec,
             "case_ttl_sec": self.case_ttl_sec,
             "retained_cases": case_count,
+            "retained_geometries": geometry_count,
             "hard_timeout_watchdog": self.hard_timeout_handler is not None,
             "priority_policy": {
                 "nk_burst_limit": self.nk_burst_limit,
@@ -649,6 +682,11 @@ class JobScheduler:
             connection.execute("BEGIN IMMEDIATE")
             row = self._row(job_id, connection)
             if row["cancel_requested"]:
+                geometry_key, geometry_id = self._result_geometry(result)
+                if geometry_key is not None and geometry_id is not None:
+                    self._register_geometry_in_connection(
+                        geometry_key, geometry_id, connection, now=now
+                    )
                 connection.execute(
                     """
                     UPDATE jobs SET state = 'cancelled', updated_at = ?, finished_at = ?,
@@ -658,6 +696,9 @@ class JobScheduler:
                     (now, now, now + self.result_ttl_sec, job_id),
                 )
                 self._delete_job_directory(job_id)
+                case_id = result.get("case_id") if isinstance(result, dict) else None
+                if row["action"] == "predict" and isinstance(case_id, str):
+                    self._delete_case_directory(case_id)
             else:
                 connection.execute(
                     """
@@ -667,10 +708,19 @@ class JobScheduler:
                     """,
                     (now, now, now + self.result_ttl_sec, job_id),
                 )
+                geometry_key, geometry_id = self._result_geometry(result)
+                if geometry_key is not None and geometry_id is not None:
+                    self._register_geometry_in_connection(
+                        geometry_key, geometry_id, connection, now=now
+                    )
                 case_id = result.get("case_id") if isinstance(result, dict) else None
                 if row["action"] == "predict" and isinstance(case_id, str):
                     self._register_case_in_connection(
-                        case_id, str(row["client_id"]), connection, now=now
+                        case_id,
+                        str(row["client_id"]),
+                        connection,
+                        geometry_key=geometry_key,
+                        now=now,
                     )
 
     def _finish_failure(self, job_id: str, exc: Exception) -> None:
@@ -794,7 +844,66 @@ class JobScheduler:
                     "DELETE FROM cases WHERE case_id = ?",
                     [(case_id,) for case_id in case_ids],
                 )
-        return len(job_ids) + len(case_ids)
+            expired_geometries = connection.execute(
+                """
+                SELECT geometry_key, geometry_id FROM geometries
+                 WHERE expires_at <= ?
+                   AND NOT EXISTS (
+                       SELECT 1 FROM cases
+                        WHERE cases.geometry_key = geometries.geometry_key
+                   )
+                   AND NOT EXISTS (
+                       SELECT 1 FROM jobs
+                        WHERE state IN ('queued', 'running')
+                          AND resource_key = 'geometry:' || geometries.geometry_key
+                   )
+                """,
+                (now,),
+            ).fetchall()
+            geometry_keys = [str(row["geometry_key"]) for row in expired_geometries]
+            for row in expired_geometries:
+                self._delete_geometry_artifacts(
+                    str(row["geometry_key"]), str(row["geometry_id"])
+                )
+            if geometry_keys:
+                connection.executemany(
+                    "DELETE FROM geometries WHERE geometry_key = ?",
+                    [(geometry_key,) for geometry_key in geometry_keys],
+                )
+        return len(job_ids) + len(case_ids) + len(geometry_keys)
+
+    @staticmethod
+    def _result_geometry(result: Any) -> tuple[str | None, str | None]:
+        if not isinstance(result, dict):
+            return None, None
+        geometry_id = result.get("geometry_id")
+        mesh = result.get("mesh") if isinstance(result.get("mesh"), dict) else result
+        geometry_key = mesh.get("geometry_key") if isinstance(mesh, dict) else None
+        if not isinstance(geometry_key, str) or not re.fullmatch(r"[0-9a-f]{12}", geometry_key):
+            return None, None
+        if not isinstance(geometry_id, str) or not re.fullmatch(r"[0-9a-f]{64}", geometry_id):
+            return None, None
+        return geometry_key, geometry_id
+
+    def _register_geometry_in_connection(
+        self,
+        geometry_key: str,
+        geometry_id: str,
+        connection: sqlite3.Connection,
+        *,
+        now: float,
+    ) -> None:
+        connection.execute(
+            """
+            INSERT INTO geometries(geometry_key, geometry_id, created_at, updated_at, expires_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(geometry_key) DO UPDATE SET
+                geometry_id = excluded.geometry_id,
+                updated_at = excluded.updated_at,
+                expires_at = excluded.expires_at
+            """,
+            (geometry_key, geometry_id, now, now, now + self.case_ttl_sec),
+        )
 
     def _register_case_in_connection(
         self,
@@ -802,6 +911,7 @@ class JobScheduler:
         client_id: str,
         connection: sqlite3.Connection,
         *,
+        geometry_key: str | None = None,
         now: float | None = None,
     ) -> None:
         if not CASE_ID_PATTERN.fullmatch(case_id):
@@ -809,13 +919,22 @@ class JobScheduler:
         timestamp = self._clock() if now is None else now
         connection.execute(
             """
-            INSERT INTO cases(case_id, client_id, created_at, updated_at, expires_at)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO cases(
+                case_id, client_id, geometry_key, created_at, updated_at, expires_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(case_id) DO UPDATE SET
+                geometry_key = excluded.geometry_key,
                 updated_at = excluded.updated_at,
                 expires_at = excluded.expires_at
             """,
-            (case_id, client_id, timestamp, timestamp, timestamp + self.case_ttl_sec),
+            (
+                case_id,
+                client_id,
+                geometry_key,
+                timestamp,
+                timestamp,
+                timestamp + self.case_ttl_sec,
+            ),
         )
 
     def register_case(self, case_id: str, client_id: str) -> None:
@@ -858,6 +977,28 @@ class JobScheduler:
             raise RuntimeError("Unsafe case cleanup path.")
         if directory.is_dir():
             shutil.rmtree(directory)
+
+    @staticmethod
+    def _safe_cache_path(root: Path, name: str) -> Path:
+        path = (root / name).resolve()
+        if path.parent != root.resolve():
+            raise RuntimeError("Unsafe geometry cleanup path.")
+        return path
+
+    def _delete_geometry_artifacts(self, geometry_key: str, geometry_id: str) -> None:
+        if not re.fullmatch(r"[0-9a-f]{12}", geometry_key) or not re.fullmatch(
+            r"[0-9a-f]{64}", geometry_id
+        ):
+            return
+        if self.mesh_root is not None:
+            for name in (f"{geometry_key}.demo.json", f"{geometry_id}.cgns"):
+                path = self._safe_cache_path(self.mesh_root, name)
+                if path.is_file():
+                    path.unlink()
+        if self.solver_prepare_root is not None:
+            directory = self._safe_cache_path(self.solver_prepare_root, geometry_key)
+            if directory.is_dir():
+                shutil.rmtree(directory)
 
     def close(self, *, timeout: float | None = 10.0) -> bool:
         self._stop.set()

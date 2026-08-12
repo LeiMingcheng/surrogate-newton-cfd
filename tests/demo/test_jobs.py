@@ -374,6 +374,38 @@ class JobSchedulerTests(unittest.TestCase):
         self.assertFalse(owned.exists())
         self.assertTrue(unrelated.exists())
 
+    def test_geometry_ttl_removes_only_exact_unreferenced_cache(self) -> None:
+        engine = FakeEngine()
+        case_root = self.root.parent / "cases"
+        mesh_root = self.root.parent / "meshes"
+        solver_root = self.root.parent / "solver_prepare"
+        geometry_key = "a" * 12
+        geometry_id = "b" * 64
+        mesh_root.mkdir(parents=True)
+        (mesh_root / f"{geometry_key}.demo.json").write_text("{}")
+        (mesh_root / f"{geometry_id}.cgns").write_bytes(b"fixture")
+        (mesh_root / "keep.txt").write_text("keep")
+        (solver_root / geometry_key).mkdir(parents=True)
+        scheduler = self.scheduler(
+            engine,
+            autostart=False,
+            case_root=case_root,
+            mesh_root=mesh_root,
+            solver_prepare_root=solver_root,
+            case_ttl_sec=0.01,
+        )
+        now = time.time()
+        with scheduler._connection() as connection:
+            scheduler._register_geometry_in_connection(
+                geometry_key, geometry_id, connection, now=now
+            )
+        time.sleep(0.02)
+        self.assertEqual(scheduler.cleanup_expired(), 1)
+        self.assertFalse((mesh_root / f"{geometry_key}.demo.json").exists())
+        self.assertFalse((mesh_root / f"{geometry_id}.cgns").exists())
+        self.assertFalse((solver_root / geometry_key).exists())
+        self.assertTrue((mesh_root / "keep.txt").exists())
+
     def test_watchdog_escalates_stuck_native_call(self) -> None:
         gate = threading.Event()
         escalated = threading.Event()
