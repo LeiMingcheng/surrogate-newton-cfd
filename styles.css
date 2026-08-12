@@ -518,7 +518,10 @@ pre {
     gap: 28px;
   }
 
-  .method-sequence,
+  .method-sequence {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .method-formulation {
     grid-template-columns: 1fr;
   }
@@ -528,17 +531,22 @@ pre {
     padding: 18px 16px;
   }
 
-  .method-sequence li:not(:last-child),
-  .method-formulation p:not(:last-child) {
+  .method-sequence li,
+  .method-sequence li:not(:last-child) {
     border-right: 0;
+  }
+
+  .method-sequence li:nth-child(odd) {
+    border-right: 1px solid var(--line);
+  }
+
+  .method-sequence li:nth-child(-n + 2),
+  .method-formulation p:not(:last-child) {
     border-bottom: 1px solid var(--line);
   }
 
   .method-sequence li:not(:last-child)::after {
-    top: auto;
-    right: 16px;
-    bottom: -9px;
-    transform: rotate(90deg);
+    content: none;
   }
 
   .benchmark-grid .figure-panel img {
@@ -557,6 +565,42 @@ pre {
 
   .paper-footer {
     display: grid;
+  }
+}
+
+@media (max-width: 520px) {
+  .method-intro {
+    text-align: left;
+  }
+
+  .method-intro h3 {
+    font-size: 21px;
+  }
+
+  .method-intro p {
+    font-size: 16px;
+    line-height: 1.65;
+  }
+
+  .method-sequence {
+    grid-template-columns: 1fr;
+    margin-top: 28px;
+  }
+
+  .method-sequence li:nth-child(odd) {
+    border-right: 0;
+  }
+
+  .method-sequence li:nth-child(-n + 3) {
+    border-bottom: 1px solid var(--line);
+  }
+
+  .method-formulation p {
+    padding-inline: 14px;
+  }
+
+  .method-formulation code {
+    font-size: 14px;
   }
 }
 
