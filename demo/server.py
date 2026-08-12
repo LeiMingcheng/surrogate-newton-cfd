@@ -40,28 +40,32 @@ STATIC_ROUTES = {
     "/assets/paper-ood-benchmark.jpg": "assets/paper-ood-benchmark.jpg",
     "/assets/paper-recovery.jpg": "assets/paper-recovery.jpg",
     "/assets/paper-optimization.png": "assets/paper-optimization.png",
-    "/assets/original/fig1_workflow.png": "assets/original/fig1_workflow.png",
-    "/assets/original/fig2_a_dataset_geometries.svg": (
-        "assets/original/fig2_a_dataset_geometries.svg"
-    ),
-    "/assets/original/fig2_b_geometry_ood_score_distribution.svg": (
-        "assets/original/fig2_b_geometry_ood_score_distribution.svg"
-    ),
-    "/assets/original/fig2_c_geometry_pca_projection.svg": (
-        "assets/original/fig2_c_geometry_pca_projection.svg"
-    ),
-    "/assets/original/fig3_a_recovery_comparison.svg": (
-        "assets/original/fig3_a_recovery_comparison.svg"
-    ),
-    "/assets/original/fig3_c_ellipse_pressure_recovery.svg": (
-        "assets/original/fig3_c_ellipse_pressure_recovery.svg"
-    ),
-    "/assets/original/fig5_a_optimization_curves_2x2_nk.svg": (
-        "assets/original/fig5_a_optimization_curves_2x2_nk.svg"
-    ),
-    "/assets/original/fig5_b_cp_summary_2row_nk.svg": (
-        "assets/original/fig5_b_cp_summary_2row_nk.svg"
-    ),
+    **{
+        f"/assets/figures/{name}.png": f"assets/figures/{name}.png"
+        for name in (
+            "fig1_workflow",
+            "fig2_a_dataset_geometries",
+            "fig2_b_geometry_ood_score_distribution",
+            "fig3_a_recovery_comparison",
+            "fig3_c_ellipse_pressure_recovery",
+            "fig5_a_optimization_curves_2x2_nk",
+            "fig6_a_geometry_ood",
+            "fig6_d_pressure_flow_recovery",
+        )
+    },
+    **{
+        f"/assets/figure-sources/{name}.pdf": f"assets/figure-sources/{name}.pdf"
+        for name in (
+            "fig1_workflow",
+            "fig2_a_dataset_geometries",
+            "fig2_b_geometry_ood_score_distribution",
+            "fig3_a_recovery_comparison",
+            "fig3_c_ellipse_pressure_recovery",
+            "fig5_a_optimization_curves_2x2_nk",
+            "fig6_a_geometry_ood",
+            "fig6_d_pressure_flow_recovery",
+        )
+    },
 }
 CASE_ROUTE = re.compile(r"^/api/cases/(case_[A-Za-z0-9_]+)$")
 ACTION_ROUTE = re.compile(r"^/api/cases/(case_[A-Za-z0-9_]+)/(recover|reference)$")
@@ -75,6 +79,7 @@ CONTENT_TYPES = {
     ".png": "image/png",
     ".jpg": "image/jpeg",
     ".jpeg": "image/jpeg",
+    ".pdf": "application/pdf",
     ".json": "application/json; charset=utf-8",
     ".dat": "text/plain; charset=utf-8",
     ".txt": "text/plain; charset=utf-8",

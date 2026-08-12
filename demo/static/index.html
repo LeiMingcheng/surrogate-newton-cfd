@@ -30,16 +30,17 @@
         </p>
 
         <nav class="resource-links" aria-label="Project resources">
-          <a href="/demo">Demo</a>
-          <a href="https://arxiv.org/abs/2608.04400" rel="noreferrer">Paper</a>
-          <a href="https://github.com/LeiMingcheng/surrogate-newton-cfd" rel="noreferrer">Code</a>
-          <a href="#bibtex">BibTeX</a>
-          <a href="mailto:leimc22@mails.tsinghua.edu.cn">Email</a>
+          <a href="https://arxiv.org/abs/2608.04400" rel="noreferrer"><span class="button-icon" aria-hidden="true">▤</span>Paper</a>
+          <a href="https://github.com/LeiMingcheng/surrogate-newton-cfd" rel="noreferrer"><span class="button-icon code-icon" aria-hidden="true">&lt;/&gt;</span>Code</a>
+          <a href="#bibtex"><span class="button-icon" aria-hidden="true">❝</span>BibTeX</a>
+          <a href="/demo"><span class="button-icon" aria-hidden="true">▷</span>Interactive</a>
         </nav>
       </header>
 
       <section class="teaser page-wide" aria-labelledby="teaser-caption">
-        <img src="/assets/original/fig1_workflow.png" alt="Comparison of standalone surrogate prediction, conventional cold-start CFD, and solver-coupled Surrogate-Newton CFD">
+        <a class="figure-image-link" href="./assets/figure-sources/fig1_workflow.pdf" aria-label="Open the workflow figure as a PDF">
+          <img src="./assets/figures/fig1_workflow.png" alt="Comparison of standalone surrogate prediction, conventional cold-start CFD, and solver-coupled Surrogate-Newton CFD">
+        </a>
         <p id="teaser-caption" class="lead-caption">
           <strong>Surrogate-Newton CFD</strong> uses a learned full-field prediction to enter the convergence region of the target solver, then applies Newton-Krylov updates until the native residual satisfies the solver tolerance.
         </p>
@@ -67,12 +68,19 @@
               Jacobian-free Newton-Krylov updates solve the local correction equation <span class="equation">JΔU = -R</span>. The corrected state is accepted only when the prescribed residual threshold is reached. This separates fast learned initialization from numerical certification.
             </p>
           </div>
-          <ol class="method-sequence" aria-label="Method sequence">
-            <li><strong>Predict</strong><span>Full flow and turbulence state</span></li>
-            <li><strong>Evaluate</strong><span>Native discrete residual</span></li>
-            <li><strong>Correct</strong><span>Newton-Krylov updates</span></li>
-            <li><strong>Accept</strong><span>Solver-converged state</span></li>
-          </ol>
+          <aside class="solver-card" aria-label="Solver-coupled correction path">
+            <div class="solver-card-head">
+              <span>Solver-coupled path</span>
+              <strong>Û <i aria-hidden="true">→</i> U<sub>NK</sub></strong>
+            </div>
+            <ol class="method-sequence">
+              <li><span class="step-index">01</span><div><strong>Predict</strong><small>Full flow and turbulence state from geometry and conditions.</small></div></li>
+              <li><span class="step-index">02</span><div><strong>Evaluate</strong><small>Measure the native discrete residual on the target mesh.</small></div></li>
+              <li><span class="step-index">03</span><div><strong>Correct</strong><small>Apply Jacobian-free Newton-Krylov updates.</small></div></li>
+              <li><span class="step-index">04</span><div><strong>Accept</strong><small>Stop only when the solver tolerance is satisfied.</small></div></li>
+            </ol>
+            <p class="acceptance-rule"><span aria-hidden="true">✓</span><strong>Acceptance rule</strong><code>‖R(U<sub>NK</sub>)‖ ≤ ε</code></p>
+          </aside>
         </div>
       </section>
 
@@ -86,18 +94,14 @@
 
         <div class="figure-grid benchmark-grid">
           <figure class="figure-panel panel-tall">
-            <img src="/assets/original/fig2_a_dataset_geometries.svg" alt="Laminar training, supercritical training, and optimization benchmark airfoil populations" loading="lazy">
+            <a class="figure-image-link" href="./assets/figure-sources/fig2_a_dataset_geometries.pdf" aria-label="Open Figure 2a as a PDF"><img src="./assets/figures/fig2_a_dataset_geometries.png" alt="Laminar training, supercritical training, and optimization benchmark airfoil populations" loading="lazy"></a>
             <figcaption><strong>(a) Geometry populations.</strong> Optimization generates shapes that differ systematically from the training families.</figcaption>
           </figure>
           <figure class="figure-panel">
-            <img src="/assets/original/fig2_b_geometry_ood_score_distribution.svg" alt="Nearest-neighbour distance distributions for training, validation, and benchmark geometries" loading="lazy">
+            <a class="figure-image-link" href="./assets/figure-sources/fig2_b_geometry_ood_score_distribution.pdf" aria-label="Open Figure 2b as a PDF"><img src="./assets/figures/fig2_b_geometry_ood_score_distribution.png" alt="Nearest-neighbour distance distributions for training, validation, and benchmark geometries" loading="lazy"></a>
             <figcaption><strong>(b) Nearest-neighbour distance.</strong> Most benchmark geometries lie beyond the training distribution's high-percentile region.</figcaption>
           </figure>
         </div>
-        <figure class="figure-panel figure-wide">
-          <img src="/assets/original/fig2_c_geometry_pca_projection.svg" alt="Principal-component projection of training, validation, optimization benchmark, and reference airfoils" loading="lazy">
-          <figcaption><strong>(c) Shape-space projection.</strong> Benchmark and reference sequences probe increasingly sparse regions around and beyond the training support.</figcaption>
-        </figure>
       </section>
 
       <section class="paper-section page-wide" id="results">
@@ -110,7 +114,7 @@
 
         <div class="results-stack">
           <figure class="figure-panel result-row">
-            <div class="result-image"><img src="/assets/original/fig3_a_recovery_comparison.svg" alt="Residual, field, lift, and drag error distributions before and after correction" loading="lazy"></div>
+            <div class="result-image"><a class="figure-image-link" href="./assets/figure-sources/fig3_a_recovery_comparison.pdf" aria-label="Open Figure 3a as a PDF"><img src="./assets/figures/fig3_a_recovery_comparison.png" alt="Residual, field, lift, and drag error distributions before and after correction" loading="lazy"></a></div>
             <figcaption>
               <span class="figure-number">Result 1</span>
               <strong>Residual and aerodynamic errors decrease together.</strong>
@@ -119,11 +123,11 @@
           </figure>
 
           <figure class="figure-panel result-row reverse">
-            <div class="result-image"><img src="/assets/original/fig3_c_ellipse_pressure_recovery.svg" alt="Pressure fields and absolute errors before and after Newton-Krylov correction across increasing OOD distance" loading="lazy"></div>
+            <div class="result-image"><a class="figure-image-link" href="./assets/figure-sources/fig3_c_ellipse_pressure_recovery.pdf" aria-label="Open Figure 3c as a PDF"><img src="./assets/figures/fig3_c_ellipse_pressure_recovery.png" alt="Pressure fields and absolute errors along a geometry sequence from RAE2822 to an out-of-distribution ellipse" loading="lazy"></a></div>
             <figcaption>
               <span class="figure-number">Result 2</span>
-              <strong>Correction remains effective beyond the training support.</strong>
-              Across RAE2822, P80, P95, and a beyond-P99 ellipse, the corrected pressure field closely follows converged CFD and sharply reduces shock-related error.
+              <strong>A representative sequence toward an OOD ellipse.</strong>
+              From the reference RAE2822 airfoil toward a strongly shifted ellipse geometry, Newton-Krylov correction recovers the converged pressure structure and sharply reduces shock-related error.
             </figcaption>
           </figure>
         </div>
@@ -139,12 +143,27 @@
 
         <div class="figure-grid optimization-grid">
           <figure class="figure-panel">
-            <img src="/assets/original/fig5_a_optimization_curves_2x2_nk.svg" alt="Optimization trajectories for RAE2822 and OAT15A with surrogate-only and surrogate-Newton evaluation" loading="lazy">
+            <a class="figure-image-link" href="./assets/figure-sources/fig5_a_optimization_curves_2x2_nk.pdf" aria-label="Open Figure 5a as a PDF"><img src="./assets/figures/fig5_a_optimization_curves_2x2_nk.png" alt="Optimization trajectories for RAE2822 and OAT15A with surrogate-only and surrogate-Newton evaluation" loading="lazy"></a>
             <figcaption><strong>(a) Optimization histories.</strong> Correction brings the online estimate closer to converged CFD verification for both design tasks.</figcaption>
           </figure>
+        </div>
+      </section>
+
+      <section class="paper-section page-wide" id="three-dimensional">
+        <div class="section-intro page-width inset">
+          <h2>Extension to three-dimensional wings</h2>
+          <p>
+            We further evaluate the same coupling principle on flying-wing configurations with planforms deliberately shifted beyond the training distribution. The surrogate reconstructs the global three-dimensional flow structure, while Newton-Krylov correction restores solver-consistent sectional pressure fields.
+          </p>
+        </div>
+        <div class="three-dimensional-grid">
           <figure class="figure-panel">
-            <img src="/assets/original/fig5_b_cp_summary_2row_nk.svg" alt="Optimized airfoil geometries and surface pressure distributions at three Mach numbers" loading="lazy">
-            <figcaption><strong>(b) Final designs.</strong> Surface-pressure distributions of corrected candidates track the converged CFD solutions across three operating conditions.</figcaption>
+            <a class="figure-image-link" href="./assets/figure-sources/fig6_a_geometry_ood.pdf" aria-label="Open Figure 6a as a PDF"><img src="./assets/figures/fig6_a_geometry_ood.png" alt="Training, validation, and out-of-distribution flying-wing planform examples and distance distributions" loading="lazy"></a>
+            <figcaption><strong>(a) Controlled planform shift.</strong> Five OOD groups move systematically beyond the training and validation planform support.</figcaption>
+          </figure>
+          <figure class="figure-panel">
+            <a class="figure-image-link" href="./assets/figure-sources/fig6_d_pressure_flow_recovery.pdf" aria-label="Open Figure 6d as a PDF"><img src="./assets/figures/fig6_d_pressure_flow_recovery.png" alt="Three flying-wing sectional pressure fields comparing CFD, surrogate prediction, Newton-Krylov correction, and their errors" loading="lazy"></a>
+            <figcaption><strong>(d) Three-dimensional flow recovery.</strong> At three spanwise sections, NK15 reduces the surrogate pressure-field error and recovers the converged CFD structure.</figcaption>
           </figure>
         </div>
       </section>

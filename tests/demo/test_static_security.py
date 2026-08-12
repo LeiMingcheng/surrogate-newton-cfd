@@ -53,30 +53,36 @@ class DemoStaticSecurityTests(unittest.TestCase):
             "/assets/paper-optimization.png": (
                 DEMO_ROOT / "static" / "assets" / "paper-optimization.png"
             ),
-            "/assets/original/fig1_workflow.png": (
-                DEMO_ROOT / "static" / "assets" / "original" / "fig1_workflow.png"
-            ),
-            "/assets/original/fig2_a_dataset_geometries.svg": (
-                DEMO_ROOT / "static" / "assets" / "original" / "fig2_a_dataset_geometries.svg"
-            ),
-            "/assets/original/fig2_b_geometry_ood_score_distribution.svg": (
-                DEMO_ROOT / "static" / "assets" / "original" / "fig2_b_geometry_ood_score_distribution.svg"
-            ),
-            "/assets/original/fig2_c_geometry_pca_projection.svg": (
-                DEMO_ROOT / "static" / "assets" / "original" / "fig2_c_geometry_pca_projection.svg"
-            ),
-            "/assets/original/fig3_a_recovery_comparison.svg": (
-                DEMO_ROOT / "static" / "assets" / "original" / "fig3_a_recovery_comparison.svg"
-            ),
-            "/assets/original/fig3_c_ellipse_pressure_recovery.svg": (
-                DEMO_ROOT / "static" / "assets" / "original" / "fig3_c_ellipse_pressure_recovery.svg"
-            ),
-            "/assets/original/fig5_a_optimization_curves_2x2_nk.svg": (
-                DEMO_ROOT / "static" / "assets" / "original" / "fig5_a_optimization_curves_2x2_nk.svg"
-            ),
-            "/assets/original/fig5_b_cp_summary_2row_nk.svg": (
-                DEMO_ROOT / "static" / "assets" / "original" / "fig5_b_cp_summary_2row_nk.svg"
-            ),
+            **{
+                f"/assets/figures/{name}.png": (
+                    DEMO_ROOT / "static" / "assets" / "figures" / f"{name}.png"
+                )
+                for name in (
+                    "fig1_workflow",
+                    "fig2_a_dataset_geometries",
+                    "fig2_b_geometry_ood_score_distribution",
+                    "fig3_a_recovery_comparison",
+                    "fig3_c_ellipse_pressure_recovery",
+                    "fig5_a_optimization_curves_2x2_nk",
+                    "fig6_a_geometry_ood",
+                    "fig6_d_pressure_flow_recovery",
+                )
+            },
+            **{
+                f"/assets/figure-sources/{name}.pdf": (
+                    DEMO_ROOT / "static" / "assets" / "figure-sources" / f"{name}.pdf"
+                )
+                for name in (
+                    "fig1_workflow",
+                    "fig2_a_dataset_geometries",
+                    "fig2_b_geometry_ood_score_distribution",
+                    "fig3_a_recovery_comparison",
+                    "fig3_c_ellipse_pressure_recovery",
+                    "fig5_a_optimization_curves_2x2_nk",
+                    "fig6_a_geometry_ood",
+                    "fig6_d_pressure_flow_recovery",
+                )
+            },
         }
         html_files = (DEMO_ROOT / "static" / "index.html", DEMO_ROOT / "static" / "demo.html")
         for html_path in html_files:
