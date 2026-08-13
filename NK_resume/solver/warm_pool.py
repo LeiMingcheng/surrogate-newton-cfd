@@ -276,6 +276,67 @@ class ResidentWarmPoolController:
         self._ready_wait_sec = 0.0
         self._ready_unix_sec: float | None = None
         self._poisoned = False
+        self._restart_count = 0
+        self._last_exit: dict[str, Any] | None = None
+        self._last_recovery_error: str | None = None
+
+    def status(self) -> dict[str, Any]:
+        """Return a non-blocking snapshot of the resident worker processes."""
+
+        workers = [
+            {
+                "pool_id": int(entry["pool_id"]),
+                "alive": entry["proc"].poll() is None,
+                "ready": Path(entry["ready_file"]).is_file(),
+            }
+            for entry in tuple(self._entries)
+        ]
+        healthy = bool(
+            self._launched
+            and not self._poisoned
+            and len(workers) == self.pool_count
+            and all(worker["alive"] and worker["ready"] for worker in workers)
+        )
+        return {
+            "launched": bool(self._launched),
+            "healthy": healthy,
+            "poisoned": bool(self._poisoned),
+            "worker_count": len(workers),
+            "workers": workers,
+            "launch_count": int(self._launch_count),
+            "restart_count": int(self._restart_count),
+            "last_exit": self._last_exit,
+            "last_recovery_error": self._last_recovery_error,
+        }
+
+    def recover_if_idle(self) -> dict[str, Any]:
+        """Rebuild a failed launched pool when no compute request owns it."""
+
+        if not self._lock.acquire(blocking=False):
+            return self.status()
+        try:
+            snapshot = self.status()
+            if snapshot["launch_count"] > 0 and not snapshot["healthy"]:
+                try:
+                    self._launch()
+                except (OSError, RuntimeError, TimeoutError) as error:
+                    self._last_recovery_error = f"{type(error).__name__}: {error}"
+            return self.status()
+        finally:
+            self._lock.release()
+
+    def _discard_workers(self) -> None:
+        """Terminate and forget a stale pool so a clean pool can be launched."""
+
+        for entry in tuple(self._entries):
+            _terminate_process_group(entry["proc"])
+            try:
+                entry["log_handle"].close()
+            except OSError:
+                pass
+        self._entries.clear()
+        self._launched = False
+        self._poisoned = False
 
     def _poison(self) -> None:
         self._poisoned = True
@@ -298,8 +359,27 @@ class ResidentWarmPoolController:
 
     def _launch(self) -> None:
         if self._launched:
-            self._check_workers()
-            return
+            try:
+                self._check_workers()
+            except RuntimeError:
+                self._last_exit = {
+                    "detected_unix_sec": float(time.time()),
+                    "workers": [
+                        {
+                            "pool_id": int(entry["pool_id"]),
+                            "returncode": entry["proc"].poll(),
+                            "log_path": str(entry["log_path"]),
+                        }
+                        for entry in tuple(self._entries)
+                    ],
+                }
+                self._discard_workers()
+                self._restart_count += 1
+            else:
+                return
+        elif self._poisoned or self._entries:
+            self._discard_workers()
+            self._restart_count += 1
         self.output_root.mkdir(parents=True, exist_ok=True)
         env = build_mpi_env(
             self.mpi_omp_threads,
@@ -370,7 +450,8 @@ class ResidentWarmPoolController:
                     "--injection-strategy",
                     self.injection_strategy,
                 ]
-                log_handle = log_path.open("w", encoding="utf-8")
+                # Keep the previous traceback when an automatic rebuild occurs.
+                log_handle = log_path.open("a", encoding="utf-8")
                 proc = subprocess.Popen(
                     command,
                     stdout=log_handle,
@@ -400,11 +481,13 @@ class ResidentWarmPoolController:
                 _terminate_process_group(entry["proc"])
                 entry["log_handle"].close()
             self._entries.clear()
+            self._launched = False
             raise
         self._ready_wait_sec = float(time.perf_counter() - launch_t0)
         self._ready_unix_sec = float(time.time())
         self._launch_count += 1
         self._launched = True
+        self._last_recovery_error = None
 
     def _submit(
         self,

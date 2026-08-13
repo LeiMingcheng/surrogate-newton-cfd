@@ -119,6 +119,7 @@ environment variables:
 | `DEMO_HEAVY_JOB_CONCURRENCY` | `1` | Dedicated heavy-engine workers; only `1` or `2` |
 | `DEMO_NK_BURST_LIMIT` | `3` | Consecutive NK jobs before one waiting cold start is admitted |
 | `DEMO_COLD_START_MAX_WAIT_SEC` | `300` | Maximum cold-start wait before priority promotion |
+| `DEMO_RESIDENT_IDLE_TIMEOUT_SEC` | `0` | Resident MPI worker idle timeout; `0` keeps workers alive |
 | `DEMO_ANK_NK_MAX_WORK` | `1000` | Server-side ADFLOW work ceiling for the continuous ANK-to-NK solve |
 | `DEMO_ANK_NK_TIME_LIMIT_S` | `10` | Server-side ANK-to-NK wall-time ceiling in seconds |
 | `DEMO_ANK_NK_SWITCH_TOL` | `1e-4` | Relative residual ratio at which ANK switches to NK |

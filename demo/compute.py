@@ -503,6 +503,7 @@ class DemoEngine:
         statistics: Path | None = None,
         device: str = "cuda:0",
         resident_pool_root: Path | None = None,
+        resident_idle_timeout_sec: float = 0.0,
         ank_nk_max_work: int = DEFAULT_DEMO_ANK_NK_MAX_WORK,
         ank_nk_time_limit_s: float = DEFAULT_DEMO_ANK_NK_TIME_LIMIT_S,
         ank_nk_switch_tolerance: float = DEFAULT_DEMO_ANK_NK_SWITCH_TOL,
@@ -533,6 +534,9 @@ class DemoEngine:
         self.mpi_ranks = int(mpi_ranks)
         if self.mpi_ranks < 1:
             raise ValueError("DEMO_MPI_RANKS must be positive.")
+        self.resident_idle_timeout_sec = float(resident_idle_timeout_sec)
+        if self.resident_idle_timeout_sec < 0.0:
+            raise ValueError("DEMO_RESIDENT_IDLE_TIMEOUT_SEC cannot be negative.")
         self.ank_nk_max_work = int(ank_nk_max_work)
         self.ank_nk_time_limit_s = float(ank_nk_time_limit_s)
         self.ank_nk_switch_tolerance = float(ank_nk_switch_tolerance)
@@ -581,7 +585,7 @@ class DemoEngine:
             output_dir=self.resident_pool_root,
             ready_timeout_sec=120.0,
             submit_timeout_sec=7200.0,
-            request_wait_timeout_sec=7200.0,
+            request_wait_timeout_sec=self.resident_idle_timeout_sec,
         )
         self._prewarm_summary: dict[str, Any] | None = None
 
@@ -606,11 +610,24 @@ class DemoEngine:
             importlib.util.find_spec(name) is not None
             for name in ("adflow", "cgnsutilities", "pyhyp")
         )
-        solver_ready = solver_modules and _launcher_available(self.mpi_launcher)
+        solver_dependencies_ready = solver_modules and _launcher_available(
+            self.mpi_launcher
+        )
+        # Readiness polling doubles as a lightweight supervisor. It never
+        # interrupts an active request, but rebuilds a failed idle MPI pool.
+        solver_runtime = self._solver_pool.recover_if_idle()
+        solver_ready = bool(
+            solver_dependencies_ready
+            and (
+                solver_runtime["launch_count"] == 0
+                or solver_runtime["healthy"]
+            )
+        )
         return {
             "mode": "local-only",
             "surrogate_online": surrogate_online,
             "solver_ready": solver_ready,
+            "solver_runtime": solver_runtime,
             "airfoil_library_available": (
                 self.airfoil_library_root / "catalog.json"
             ).is_file(),
@@ -619,6 +636,7 @@ class DemoEngine:
             "resources": {
                 "gpu": 1,
                 "cpu_ranks_per_case": self.mpi_ranks,
+                "resident_idle_timeout_sec": self.resident_idle_timeout_sec,
                 "ank_nk": {
                     "max_work": self.ank_nk_max_work,
                     "time_limit_s": self.ank_nk_time_limit_s,

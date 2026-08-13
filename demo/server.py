@@ -458,6 +458,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--mpi-ranks", type=int, default=int(os.environ.get("DEMO_MPI_RANKS", "8"))
     )
     parser.add_argument(
+        "--resident-idle-timeout-sec",
+        type=float,
+        default=float(os.environ.get("DEMO_RESIDENT_IDLE_TIMEOUT_SEC", "0")),
+        help="Resident MPI worker idle timeout in seconds; zero keeps workers alive.",
+    )
+    parser.add_argument(
         "--ank-nk-max-work",
         type=int,
         default=int(os.environ.get("DEMO_ANK_NK_MAX_WORK", "1000")),
@@ -617,6 +623,7 @@ def main() -> int:
         "ood_asset_root": args.ood_asset_root,
         "mpi_launcher": args.mpi_launcher,
         "mpi_ranks": args.mpi_ranks,
+        "resident_idle_timeout_sec": args.resident_idle_timeout_sec,
         "ank_nk_max_work": args.ank_nk_max_work,
         "ank_nk_time_limit_s": args.ank_nk_time_limit_s,
         "ank_nk_switch_tolerance": args.ank_nk_switch_tolerance,
