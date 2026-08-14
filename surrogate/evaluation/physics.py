@@ -12,7 +12,11 @@ from typing import Any, Dict, Iterable, Mapping, Optional
 import numpy as np
 import torch
 
-from surrogate.physics.forces import ForceCoefficientsCalculator, compute_force_components_ogrid_torch
+from surrogate.physics.forces import (
+    STANDARD_MOMENT_REFERENCE,
+    ForceCoefficientsCalculator,
+    compute_force_components_ogrid_torch,
+)
 
 
 @dataclass
@@ -22,7 +26,7 @@ class ForceMetricsConfig:
     gamma: float = 1.4
     chord_ref: float = 1.0
     area_ref: float = 1.0
-    moment_center: tuple[float, float] = (0.0, 0.0)
+    moment_center: tuple[float, float] = STANDARD_MOMENT_REFERENCE
     compute_viscous: bool = True
     t_inf: float = 300.0
 

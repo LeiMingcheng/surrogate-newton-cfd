@@ -9,7 +9,10 @@ from typing import Any, Optional
 import numpy as np
 import torch
 
-from surrogate.physics.forces import compute_force_coefficients_ogrid_torch
+from surrogate.physics.forces import (
+    STANDARD_MOMENT_REFERENCE,
+    compute_force_coefficients_ogrid_torch,
+)
 from surrogate.physics.pde.surface_forces import prepare_surface_force_geometry
 from surrogate.serving._tensors import as_1d_tensor, expand_geometry, expand_spatial
 from surrogate.serving.contracts import AoARequest, AoAResult, PredictionRequest
@@ -30,7 +33,7 @@ class AoASolverConfig:
     gamma: float = 1.4
     chord_ref: float = 1.0
     area_ref: float = 1.0
-    moment_center: tuple[float, float] = (0.0, 0.0)
+    moment_center: tuple[float, float] = STANDARD_MOMENT_REFERENCE
     t_inf: float = 300.0
 
     def validate(self) -> None:

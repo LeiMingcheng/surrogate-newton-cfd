@@ -4,7 +4,6 @@ const COLORS = { surrogate: "#c66a2b", recovery: "#326a9a", reference: "#253543"
 const STAGE_LABELS = { surrogate: "Surrogate", recovery: "Surrogate + NK", reference: "ADflow" };
 const NS = "http://www.w3.org/2000/svg";
 const DEFAULT_REYNOLDS_PER_MACH = 22132436.863567192;
-const FIELD_SMOOTHING_PX = 0.7;
 const JOB_POLL_INTERVAL_MS = 750;
 const DEFAULT_HANDLE_COUNT = 6;
 const MIN_HANDLE_COUNT = 3;
@@ -219,14 +218,13 @@ function setGeometry(geometry) {
   $("#thickness-value").textContent = `t/c ${(100 * geometry.metrics.max_thickness).toFixed(2)}%`;
   const badge = $("#ood-badge");
   const ood = geometry.ood;
-  badge.textContent = ood ? `${Math.round(100 * ood.percentile)}th percentile` : "OOD —";
+  badge.textContent = ood ? `${ood.is_ood ? "OOD" : "ID"} · P${(100 * ood.percentile).toFixed(1)}` : "OOD —";
   badge.className = "";
-  if (ood?.label === "distribution edge") badge.classList.add("edge");
-  if (ood?.label === "out-of-distribution") badge.classList.add("out");
-  badge.title = ood ? `${ood.label}: ${ood.definition}` : "";
-  $("#d5-value").innerHTML = ood ? `d<sub>5</sub> ${formatNumber(ood.distance_k5, 6)}` : "d<sub>5</sub> —";
+  if (ood) badge.classList.add(ood.is_ood ? "out" : "id");
+  badge.title = ood ? `${ood.scope || "Geometry-only warning"}: ${ood.definition}` : "";
+  $("#d5-value").innerHTML = ood ? `d<sub>5</sub> ${formatNumber(ood.distance_k5, 6)} c` : "d<sub>5</sub> —";
   $("#fit-note").textContent = ood
-    ? "d₅ is the mean surface-RMS distance to the five nearest training geometries; the percentile is its rank in the training d₅ distribution."
+    ? "Geometry-only warning: d₅ is the mean surface-RMS distance to the five nearest training geometries. P99 is the ID/OOD threshold; the percentile is a rank, not a failure probability."
     : "Optional offline geometry-distance assets are not mounted; geometry editing and computation remain available.";
   drawGeometry();
   clearCase();
@@ -437,7 +435,7 @@ function plotPath(xValues, yValues, mapX, mapY) {
   return xValues.map((value, index) => `${index === 0 ? "M" : "L"}${mapX(Number(value)).toFixed(2)},${mapY(Number(yValues[index])).toFixed(2)}`).join(" ");
 }
 
-function drawAxes(svg, { xTicks, yTicks, mapX, mapY, xLabel, yLabel }) {
+function drawAxes(svg, { xTicks, yTicks, mapX, mapY, xLabel, yLabel, yFormatter = (tick) => Number(tick).toPrecision(2) }) {
   const grid = svg.querySelector(".chart-grid"); const labels = svg.querySelector(".chart-labels");
   grid.replaceChildren(); labels.replaceChildren();
   xTicks.forEach((tick) => {
@@ -446,10 +444,27 @@ function drawAxes(svg, { xTicks, yTicks, mapX, mapY, xLabel, yLabel }) {
   });
   yTicks.forEach((tick) => {
     grid.appendChild(svgElement("line", { x1: 58, x2: svg.viewBox.baseVal.width - 22, y1: mapY(tick), y2: mapY(tick), class: tick === 0 ? "axis" : "" }));
-    const label = svgElement("text", { x: 50, y: mapY(tick) + 4, "text-anchor": "end" }); label.textContent = Number(tick).toPrecision(2); labels.appendChild(label);
+    const label = svgElement("text", { x: 50, y: mapY(tick) + 4, "text-anchor": "end" }); label.textContent = yFormatter(tick); labels.appendChild(label);
   });
   const xTitle = svgElement("text", { x: svg.viewBox.baseVal.width / 2, y: svg.viewBox.baseVal.height - 3, "text-anchor": "middle" }); xTitle.textContent = xLabel; labels.appendChild(xTitle);
   const yTitle = svgElement("text", { x: 14, y: svg.viewBox.baseVal.height / 2, transform: `rotate(-90 14 ${svg.viewBox.baseVal.height / 2})`, "text-anchor": "middle" }); yTitle.textContent = yLabel; labels.appendChild(yTitle);
+}
+
+function niceStep(span, targetCount = 6) {
+  const raw = Math.max(Math.abs(span), 1e-12) / targetCount;
+  const power = 10 ** Math.floor(Math.log10(raw));
+  const fraction = raw / power;
+  const niceFraction = fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 5 ? 5 : 10;
+  return niceFraction * power;
+}
+
+function niceTicks(minimum, maximum, { include = [], targetCount = 6 } = {}) {
+  const step = niceStep(maximum - minimum, targetCount);
+  const start = Math.ceil((minimum - 1e-12) / step) * step;
+  const ticks = [];
+  for (let value = start; value <= maximum + 1e-12; value += step) ticks.push(Number(value.toPrecision(12)));
+  include.forEach((value) => { if (value >= minimum && value <= maximum && !ticks.some((tick) => Math.abs(tick - value) < 1e-10)) ticks.push(value); });
+  return ticks.sort((a, b) => a - b);
 }
 
 function legendItem(label, color, { dashed = false, marker = "", wide = false } = {}) {
@@ -473,11 +488,13 @@ function renderCp() {
   const available = Object.entries(state.stages).filter(([, stage]) => stage.cp);
   $("#cp-empty").hidden = available.length > 0; svg.hidden = available.length === 0;
   if (!available.length) return;
-  const allCp = available.flatMap(([, stage]) => [...stage.cp.upper.cp, ...stage.cp.lower.cp]).map(Number).filter(Number.isFinite).sort((a, b) => a - b);
-  const low = allCp[Math.floor(0.01 * (allCp.length - 1))]; const high = allCp[Math.ceil(0.99 * (allCp.length - 1))];
-  const margin = Math.max(0.1, 0.08 * (high - low)); const yMin = low - margin; const yMax = high + margin;
+  const allCp = available.flatMap(([, stage]) => [...stage.cp.upper.cp, ...stage.cp.lower.cp]).map(Number).filter(Number.isFinite);
+  const actualMin = Math.min(...allCp); const actualMax = Math.max(...allCp);
+  const margin = Math.max(0.08, 0.05 * (actualMax - actualMin));
+  const yMin = actualMin - margin;
+  const yMax = actualMax > 1.05 ? actualMax + margin : 1.12;
   const mapX = (value) => 58 + value * 820; const mapY = (value) => 25 + ((value - yMin) / (yMax - yMin || 1)) * 317;
-  drawAxes(svg, { xTicks: [0, 0.25, 0.5, 0.75, 1], yTicks: Array.from({ length: 5 }, (_, index) => yMin + index * (yMax - yMin) / 4), mapX, mapY, xLabel: "x / c", yLabel: "Cp" });
+  drawAxes(svg, { xTicks: [0, 0.25, 0.5, 0.75, 1], yTicks: niceTicks(yMin, yMax, { include: [0, 1] }), mapX, mapY, xLabel: "x / c", yLabel: "Cp", yFormatter: (tick) => Number(tick).toFixed(1) });
   const byKey = Object.fromEntries(available);
   const drawOrder = ["reference", "recovery", "surrogate"].filter((key) => byKey[key]);
   drawOrder.forEach((key) => {
@@ -517,12 +534,57 @@ function renderCp() {
   legend.append(separator, legendItem("Upper surface", "#65717c"), legendItem("Lower surface", "#65717c", { dashed: true }));
 }
 
-function interpolateColor(value, stops) {
-  const clamped = Math.max(0, Math.min(0.999, value)); const scaled = clamped * (stops.length - 1); const index = Math.floor(scaled); const ratio = scaled - index;
-  return `rgb(${stops[index].map((channel, channelIndex) => Math.round(channel + ratio * (stops[Math.min(index + 1, stops.length - 1)][channelIndex] - channel))).join(",")})`;
+function renderCf() {
+  const svg = $("#cf-chart"); const series = svg.querySelector(".chart-series"); const legend = $("#cf-legend");
+  series.replaceChildren(); legend.replaceChildren();
+  const available = Object.entries(state.stages).filter(([, stage]) => stage.cf);
+  $("#cf-empty").hidden = available.length > 0; svg.hidden = available.length === 0;
+  if (!available.length) return;
+  const allCf = available.flatMap(([, stage]) => [...stage.cf.upper.cf, ...stage.cf.lower.cf]).map(Number).filter(Number.isFinite);
+  const actualMin = Math.min(...allCf, 0); const actualMax = Math.max(...allCf, 0);
+  const margin = Math.max(5e-5, 0.08 * (actualMax - actualMin || 1e-3));
+  const yMin = actualMax > 0 && actualMin >= 0 ? 0 : actualMin - margin;
+  const yMax = actualMax + margin;
+  const mapX = (value) => 58 + value * 820; const mapY = (value) => 25 + ((yMax - value) / (yMax - yMin || 1)) * 317;
+  drawAxes(svg, { xTicks: [0, 0.25, 0.5, 0.75, 1], yTicks: niceTicks(yMin, yMax, { include: [0] }), mapX, mapY, xLabel: "x / c", yLabel: "Cf", yFormatter: (tick) => formatNumber(tick, 4) });
+  const byKey = Object.fromEntries(available);
+  const drawOrder = ["reference", "recovery", "surrogate"].filter((key) => byKey[key]);
+  drawOrder.forEach((key) => {
+    ["upper", "lower"].forEach((side) => {
+      const values = byKey[key].cf[side];
+      series.appendChild(svgElement("path", {
+        d: plotPath(values.x, values.cf, mapX, mapY), fill: "none", stroke: COLORS[key],
+        "stroke-width": key === "reference" ? 5.5 : 2.4,
+        "stroke-opacity": key === "reference" ? 0.72 : 0.96,
+        "stroke-dasharray": side === "lower" ? "7 5" : "",
+        "stroke-linecap": "round", "stroke-linejoin": "round",
+      }));
+    });
+  });
+  ["recovery", "surrogate"].filter((key) => byKey[key]).forEach((key) => {
+    ["upper", "lower"].forEach((side) => {
+      const values = byKey[key].cf[side];
+      cpMarkerIndices(values.x.length, key).forEach((index) => {
+        const cx = mapX(Number(values.x[index])); const cy = mapY(Number(values.cf[index]));
+        if (key === "recovery") series.appendChild(svgElement("circle", { cx, cy, r: 4, fill: "#fff", stroke: COLORS[key], "stroke-width": 2 }));
+        else series.appendChild(svgElement("rect", { x: cx - 2.6, y: cy - 2.6, width: 5.2, height: 5.2, fill: "#fff", stroke: COLORS[key], "stroke-width": 1.8 }));
+      });
+    });
+  });
+  drawOrder.forEach((key) => legend.appendChild(legendItem(STAGE_LABELS[key], COLORS[key], { marker: key === "recovery" ? "circle" : key === "surrogate" ? "square" : "", wide: key === "reference" })));
+  const separator = document.createElement("span"); separator.className = "legend-separator";
+  legend.append(separator, legendItem("Upper surface", "#65717c"), legendItem("Lower surface", "#65717c", { dashed: true }));
 }
-const colorMap = (value) => interpolateColor(value, [[24, 62, 115], [65, 142, 183], [107, 184, 213], [238, 228, 185], [232, 119, 60], [158, 38, 53]]);
-const errorColorMap = (value) => interpolateColor(value, [[255, 252, 245], [254, 224, 168], [245, 150, 99], [206, 73, 112], [111, 31, 123]]);
+
+function interpolateColorChannels(value, stops) {
+  const clamped = Math.max(0, Math.min(0.999, value)); const scaled = clamped * (stops.length - 1); const index = Math.floor(scaled); const ratio = scaled - index;
+  return stops[index].map((channel, channelIndex) => channel + ratio * (stops[Math.min(index + 1, stops.length - 1)][channelIndex] - channel));
+}
+function interpolateColor(value, stops) { return `rgb(${interpolateColorChannels(value, stops).map(Math.round).join(",")})`; }
+const FIELD_COLOR_STOPS = [[24, 62, 115], [65, 142, 183], [107, 184, 213], [238, 228, 185], [232, 119, 60], [158, 38, 53]];
+const ERROR_COLOR_STOPS = [[255, 252, 245], [254, 224, 168], [245, 150, 99], [206, 73, 112], [111, 31, 123]];
+const colorMap = (value) => interpolateColor(value, FIELD_COLOR_STOPS); colorMap.stops = FIELD_COLOR_STOPS;
+const errorColorMap = (value) => interpolateColor(value, ERROR_COLOR_STOPS); errorColorMap.stops = ERROR_COLOR_STOPS;
 
 function drawAirfoil(context, mapX, mapY) {
   if (!state.geometry) return;
@@ -531,27 +593,80 @@ function drawAirfoil(context, mapX, mapY) {
   context.closePath(); context.fillStyle = "#ffffff"; context.strokeStyle = "#1d2c38"; context.lineWidth = 1.1; context.fill(); context.stroke();
 }
 
+function compileFieldShader(gl, type, source) {
+  const shader = gl.createShader(type); gl.shaderSource(shader, source); gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(shader) || "Field shader compilation failed");
+  return shader;
+}
+
+function drawContinuousField(fieldLayer, field, range, values, colorStops) {
+  const gl = fieldLayer.getContext("webgl", { antialias: true, alpha: false, preserveDrawingBuffer: true });
+  if (!gl) return false;
+  const vertexShader = compileFieldShader(gl, gl.VERTEX_SHADER, "attribute vec2 a_position; attribute vec3 a_color; varying vec3 v_color; void main(){ gl_Position=vec4(a_position,0.0,1.0); v_color=a_color; }");
+  const fragmentShader = compileFieldShader(gl, gl.FRAGMENT_SHADER, "precision mediump float; varying vec3 v_color; void main(){ gl_FragColor=vec4(v_color,1.0); }");
+  const program = gl.createProgram(); gl.attachShader(program, vertexShader); gl.attachShader(program, fragmentShader); gl.linkProgram(program);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program) || "Field shader link failed");
+
+  const nodeCount = field.node_height * field.node_width;
+  const nodeSums = new Float64Array(nodeCount); const nodeWeights = new Uint8Array(nodeCount);
+  const nodeAt = (i, j) => i * field.node_width + j; const cellAt = (i, j) => i * field.width + j;
+  for (let i = 0; i < field.height; i += 1) {
+    for (let j = 0; j < field.width; j += 1) {
+      const value = Number(values[cellAt(i, j)]);
+      [nodeAt(i, j), nodeAt(i, j + 1), nodeAt(i + 1, j + 1), nodeAt(i + 1, j)].forEach((index) => { nodeSums[index] += value; nodeWeights[index] += 1; });
+    }
+  }
+  const nodeValues = new Float64Array(nodeCount);
+  for (let index = 0; index < nodeCount; index += 1) nodeValues[index] = nodeSums[index] / Math.max(1, nodeWeights[index]);
+
+  const [pMin, pMax] = range; const xMin = -0.2; const xMax = 1.2; const yMin = -0.35; const yMax = 0.35;
+  const vertices = new Float32Array(field.height * field.width * 6 * 5); let offset = 0;
+  const appendNode = (index) => {
+    const x = Number(field.x[index]); const y = Number(field.y[index]);
+    const color = interpolateColorChannels((nodeValues[index] - pMin) / (pMax - pMin || 1), colorStops);
+    vertices[offset++] = 2 * (x - xMin) / (xMax - xMin) - 1;
+    vertices[offset++] = 2 * (y - yMin) / (yMax - yMin) - 1;
+    vertices[offset++] = color[0] / 255; vertices[offset++] = color[1] / 255; vertices[offset++] = color[2] / 255;
+  };
+  for (let i = 0; i < field.height; i += 1) {
+    for (let j = 0; j < field.width; j += 1) {
+      const n0 = nodeAt(i, j); const n1 = nodeAt(i, j + 1); const n2 = nodeAt(i + 1, j + 1); const n3 = nodeAt(i + 1, j);
+      [n0, n1, n2, n0, n2, n3].forEach(appendNode);
+    }
+  }
+  gl.viewport(0, 0, fieldLayer.width, fieldLayer.height); gl.clearColor(242 / 255, 244 / 255, 246 / 255, 1); gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.useProgram(program); const buffer = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, buffer); gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+  const position = gl.getAttribLocation(program, "a_position"); const color = gl.getAttribLocation(program, "a_color");
+  gl.enableVertexAttribArray(position); gl.vertexAttribPointer(position, 2, gl.FLOAT, false, 20, 0);
+  gl.enableVertexAttribArray(color); gl.vertexAttribPointer(color, 3, gl.FLOAT, false, 20, 8);
+  gl.drawArrays(gl.TRIANGLES, 0, vertices.length / 5);
+  return true;
+}
+
+function drawFlatFieldFallback(fieldContext, field, range, values, mapColor, mapX, mapY) {
+  const [pMin, pMax] = range; const nodeAt = (i, j) => i * field.node_width + j; const cellAt = (i, j) => i * field.width + j;
+  for (let i = field.height - 1; i >= 0; i -= 1) for (let j = 0; j < field.width; j += 1) {
+    const indices = [nodeAt(i, j), nodeAt(i, j + 1), nodeAt(i + 1, j + 1), nodeAt(i + 1, j)];
+    fieldContext.beginPath(); fieldContext.moveTo(mapX(Number(field.x[indices[0]])), mapY(Number(field.y[indices[0]])));
+    for (let point = 1; point < 4; point += 1) fieldContext.lineTo(mapX(Number(field.x[indices[point]])), mapY(Number(field.y[indices[point]])));
+    fieldContext.closePath(); fieldContext.fillStyle = mapColor((Number(values[cellAt(i, j)]) - pMin) / (pMax - pMin || 1)); fieldContext.fill();
+  }
+}
+
 function drawPressureField(canvas, field, range, values, mapColor = colorMap) {
   const ratio = window.devicePixelRatio || 1; const rect = canvas.getBoundingClientRect();
   canvas.width = Math.max(1, Math.round(rect.width * ratio)); canvas.height = Math.max(1, Math.round(rect.height * ratio));
   const context = canvas.getContext("2d"); context.setTransform(ratio, 0, 0, ratio, 0, 0); context.fillStyle = "#f2f4f6"; context.fillRect(0, 0, rect.width, rect.height);
   const fieldLayer = document.createElement("canvas"); fieldLayer.width = canvas.width; fieldLayer.height = canvas.height;
-  const fieldContext = fieldLayer.getContext("2d"); fieldContext.setTransform(ratio, 0, 0, ratio, 0, 0);
-  const [pMin, pMax] = range; const xMin = -0.2; const xMax = 1.2; const yMin = -0.35; const yMax = 0.35;
+  const xMin = -0.2; const xMax = 1.2; const yMin = -0.35; const yMax = 0.35;
   const mapX = (value) => ((value - xMin) / (xMax - xMin)) * rect.width; const mapY = (value) => rect.height - ((value - yMin) / (yMax - yMin)) * rect.height;
-  const nodeAt = (i, j) => i * field.node_width + j; const cellAt = (i, j) => i * field.width + j;
-  for (let i = field.height - 1; i >= 0; i -= 1) {
-    for (let j = 0; j < field.width; j += 1) {
-      const indices = [nodeAt(i, j), nodeAt(i, j + 1), nodeAt(i + 1, j + 1), nodeAt(i + 1, j)];
-      const xs = indices.map((index) => Number(field.x[index])); const ys = indices.map((index) => Number(field.y[index]));
-      if (![...xs, ...ys].every(Number.isFinite)) continue;
-      if (Math.max(...xs) < xMin || Math.min(...xs) > xMax || Math.max(...ys) < yMin || Math.min(...ys) > yMax) continue;
-      const fill = mapColor((Number(values[cellAt(i, j)]) - pMin) / (pMax - pMin || 1));
-      fieldContext.beginPath(); fieldContext.moveTo(mapX(xs[0]), mapY(ys[0])); for (let point = 1; point < 4; point += 1) fieldContext.lineTo(mapX(xs[point]), mapY(ys[point])); fieldContext.closePath();
-      fieldContext.fillStyle = fill; fieldContext.strokeStyle = fill; fieldContext.lineWidth = 0.7; fieldContext.fill(); fieldContext.stroke();
-    }
+  let continuous = false;
+  try { continuous = drawContinuousField(fieldLayer, field, range, values, mapColor.stops || FIELD_COLOR_STOPS); } catch (_error) { continuous = false; }
+  if (!continuous) {
+    const fallback = fieldLayer.getContext("2d"); fallback.setTransform(ratio, 0, 0, ratio, 0, 0);
+    drawFlatFieldFallback(fallback, field, range, values, mapColor, mapX, mapY);
   }
-  context.save(); context.setTransform(1, 0, 0, 1, 0, 0); context.imageSmoothingEnabled = true; context.filter = `blur(${FIELD_SMOOTHING_PX * ratio}px)`; context.drawImage(fieldLayer, 0, 0); context.restore();
+  context.drawImage(fieldLayer, 0, 0, rect.width, rect.height);
   drawAirfoil(context, mapX, mapY);
 }
 
@@ -615,25 +730,53 @@ function stageWallTime(key, stage) {
   return key === "surrogate" ? stage.timing?.inference_wall_sec : stage.timing?.solver_wall_sec;
 }
 
+function dragBreakdown(stage) {
+  if (!stage?.forces || !Number.isFinite(Number(stage.forces.cd))) return "—";
+  const details = document.createElement("details"); details.className = "drag-breakdown";
+  const summary = document.createElement("summary"); summary.textContent = formatNumber(stage.forces.cd, 6);
+  const values = document.createElement("div");
+  [["CDp", stage.forces.cdp], ["CDν", stage.forces.cdv]].forEach(([label, value]) => {
+    const name = document.createElement("span"); name.textContent = label;
+    const number = document.createElement("span"); number.textContent = formatNumber(value, 6);
+    values.append(name, number);
+  });
+  details.append(summary, values);
+  return details;
+}
+
+function forceDelta(stage, reference, key, digits) {
+  const value = Number(stage?.forces?.[key]); const referenceValue = Number(reference?.forces?.[key]);
+  if (!Number.isFinite(value) || !Number.isFinite(referenceValue)) return "—";
+  const delta = value - referenceValue;
+  const percent = Math.abs(referenceValue) < 1e-10 ? "—" : `${(100 * Math.abs(delta) / Math.abs(referenceValue)).toFixed(2)}%`;
+  return `${formatNumber(delta, digits)} (${percent})`;
+}
+
 function renderMetrics() {
+  const reference = state.stages.reference;
   const rows = [
     ["Lift coefficient, CL", (key, stage) => formatNumber(stage?.forces?.cl, 5)],
-    ["Drag coefficient, CD", (key, stage) => formatNumber(stage?.forces?.cd, 6)],
-    ["Moment coefficient, CM", (key, stage) => formatNumber(stage?.forces?.cm, 5)],
+    ["Drag coefficient, CD", (_key, stage) => dragBreakdown(stage)],
+    ["Moment coefficient, Cm", (key, stage) => formatNumber(stage?.forces?.cm, 5)],
     ["Residual L2 ratio", (key, stage) => formatNumber(stage?.residual?.final, 4)],
     ["Full-field MSE vs ADflow", (key, stage) => formatNumber(stage?.reference_mse, 6)],
-    ["Force MAE vs ADflow (10|ΔCD| + |ΔCL|)", (key, stage) => formatNumber(stage?.force_mae_reference, 6)],
+    ["ΔCL vs ADflow", (_key, stage) => forceDelta(stage, reference, "cl", 5)],
+    ["ΔCD vs ADflow", (_key, stage) => forceDelta(stage, reference, "cd", 6)],
     ["Model / solver wall time", (key, stage) => { const seconds = stageWallTime(key, stage); return seconds === null || seconds === undefined ? "—" : `${formatNumber(seconds, 3)} s`; }],
     ["End-to-end request time", (key, stage) => { const seconds = key === "surrogate" ? stage?.timing?.inference_wall_sec : stage?.timing?.request_wall_sec; return seconds === null || seconds === undefined ? "—" : `${formatNumber(seconds, 3)} s`; }],
   ];
   const body = $("#comparison-body"); body.replaceChildren();
   rows.forEach(([label, formatter]) => {
     const row = document.createElement("tr"); const heading = document.createElement("th"); heading.scope = "row"; heading.textContent = label; row.appendChild(heading);
-    ["surrogate", "recovery", "reference"].forEach((key) => { const cell = document.createElement("td"); cell.textContent = formatter(key, state.stages[key]); row.appendChild(cell); }); body.appendChild(row);
+    ["surrogate", "recovery", "reference"].forEach((key) => {
+      const cell = document.createElement("td"); const content = formatter(key, state.stages[key]);
+      if (content instanceof Node) cell.appendChild(content); else cell.textContent = content;
+      row.appendChild(cell);
+    }); body.appendChild(row);
   });
 }
 
-function renderResults() { renderCp(); renderMetrics(); renderFields(); }
+function renderResults() { renderCp(); renderCf(); renderMetrics(); renderFields(); }
 
 async function loadRuntime() {
   try {
@@ -759,7 +902,8 @@ async function loadUiucCatalog() {
 function applyMeshResult(payload) {
   state.mesh = payload;
   $("#mesh-status").classList.add("ready");
-  $("#mesh-status").textContent = `Mesh ${payload.mesh_wall_sec.toFixed(2)} s · ADflow preparation ${payload.adflow_prepare_wall_sec.toFixed(2)} s · MPI ${payload.mpi_ranks}`;
+  const shape = Array.isArray(payload.mesh_shape) ? `${payload.mesh_shape[0]} × ${payload.mesh_shape[1]} cells` : "84 × 304 cells";
+  $("#mesh-status").textContent = `${shape} · ${Number(payload.cell_count || 25536).toLocaleString()} cells · mesh ${payload.mesh_wall_sec.toFixed(2)} s · ADflow preparation ${payload.adflow_prepare_wall_sec.toFixed(2)} s · MPI ${payload.mpi_ranks}`;
 }
 
 async function resumeActiveJob() {

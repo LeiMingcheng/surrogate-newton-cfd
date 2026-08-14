@@ -24,6 +24,11 @@ from __future__ import annotations
 import numpy as np
 from typing import TYPE_CHECKING, Dict, Tuple, Optional, Union
 
+from surrogate.physics.forces.conventions import (
+    STANDARD_MOMENT_REFERENCE,
+    right_hand_cmz_to_standard_cm,
+)
+
 if TYPE_CHECKING:
     import torch
 
@@ -45,7 +50,7 @@ class ForceCoefficientsCalculator:
         gamma: float = 1.4,
         chord_ref: float = 1.0,
         area_ref: Optional[float] = None,
-        moment_center: Tuple[float, float] = (0.0, 0.0),
+        moment_center: Tuple[float, float] = STANDARD_MOMENT_REFERENCE,
         device: str = 'cpu'
     ):
         """
@@ -283,8 +288,10 @@ class ForceCoefficientsCalculator:
 
         CL_total = CLp + CLv
         CD_total = CDp + CDv
-        Cmp = Mp / (S_ref * self.chord_ref)
-        Cmv = Mv / (q_nondim * S_ref * self.chord_ref)
+        Cmp = right_hand_cmz_to_standard_cm(Mp / (S_ref * self.chord_ref))
+        Cmv = right_hand_cmz_to_standard_cm(
+            Mv / (q_nondim * S_ref * self.chord_ref)
+        )
         Cm_total = Cmp + Cmv
 
         result = {
@@ -305,9 +312,9 @@ class ForceCoefficientsCalculator:
                 'CLv': float(CLv),
                 'Cmp': float(Cmp),
                 'Cmv': float(Cmv),
-                'M': float(Mp + Mv),
-                'M_p': float(Mp),
-                'M_v': float(Mv),
+                'M': float(right_hand_cmz_to_standard_cm(Mp + Mv)),
+                'M_p': float(right_hand_cmz_to_standard_cm(Mp)),
+                'M_v': float(right_hand_cmz_to_standard_cm(Mv)),
                 'aoa_deg': float(aoa_deg),
                 'mach': float(mach),
                 'Re': float(Re)
@@ -444,7 +451,7 @@ def compute_force_coefficients(
     gamma: float = 1.4,
     chord_ref: float = 1.0,
     area_ref: Optional[float] = None,
-    moment_center: Tuple[float, float] = (0.0, 0.0),
+    moment_center: Tuple[float, float] = STANDARD_MOMENT_REFERENCE,
     compute_viscous: bool = True,
     T_inf: float = 300.0
 ) -> Dict[str, float]:

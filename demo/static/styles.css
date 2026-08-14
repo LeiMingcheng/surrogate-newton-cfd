@@ -1078,6 +1078,15 @@ select:disabled {
   color: var(--red);
 }
 
+#ood-badge.id {
+  color: #2d6b4f;
+}
+
+.uiuc-training-note {
+  padding-left: 9px;
+  border-left: 2px solid var(--soft-line);
+}
+
 .action-button {
   min-height: 40px;
   padding: 8px 14px;
@@ -1434,6 +1443,51 @@ select:disabled {
   height: 390px;
 }
 
+#cf-chart {
+  display: block;
+  width: 100%;
+  height: 390px;
+}
+
+.surface-plot-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.surface-plot-grid .result-panel + .result-panel {
+  margin-top: 0;
+}
+
+.surface-plot-grid .result-heading {
+  display: block;
+}
+
+.surface-plot-grid .plot-legend {
+  justify-content: flex-start;
+  margin-top: 10px;
+}
+
+.drag-breakdown {
+  display: inline-block;
+  text-align: left;
+}
+
+.drag-breakdown summary {
+  cursor: pointer;
+  list-style-position: outside;
+  text-align: right;
+}
+
+.drag-breakdown div {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 3px 12px;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .chart-grid line {
   stroke: #e0e5e9;
   stroke-width: 1;
@@ -1784,6 +1838,7 @@ select:disabled {
   }
 
   .stage-summary,
+  .surface-plot-grid,
   .field-grid,
   .error-grid {
     grid-template-columns: 1fr;

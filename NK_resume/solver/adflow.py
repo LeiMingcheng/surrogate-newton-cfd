@@ -16,6 +16,10 @@ import numpy as np
 from ..exceptions import ContractError, NotMigratedError
 from ..geometry import cgns_geometry_key, resolve_cgns_ref
 from ..metrics import (
+    ADFLOW_CMZ_SIGN_CONVENTION,
+    STANDARD_MOMENT_REFERENCE,
+    STANDARD_MOMENT_SIGN_CONVENTION,
+    adflow_cmz_to_standard_cm,
     compute_field_force_coefficients,
     field_metrics,
     force_metrics,
@@ -199,8 +203,12 @@ def _aero_problem_kwargs(request: ProjectionRequest) -> dict[str, Any]:
         "T": float(mapping.get("temperature", mapping.get("T", 300.0))),
         "areaRef": float(mapping.get("area_ref", mapping.get("areaRef", 1.0))),
         "chordRef": float(mapping.get("chord_ref", mapping.get("chordRef", 1.0))),
-        "xRef": float(mapping.get("x_ref", mapping.get("xRef", 0.0))),
-        "yRef": float(mapping.get("y_ref", mapping.get("yRef", 0.0))),
+        "xRef": float(
+            mapping.get("x_ref", mapping.get("xRef", STANDARD_MOMENT_REFERENCE[0]))
+        ),
+        "yRef": float(
+            mapping.get("y_ref", mapping.get("yRef", STANDARD_MOMENT_REFERENCE[1]))
+        ),
         "zRef": float(mapping.get("z_ref", mapping.get("zRef", 0.0))),
         "evalFuncs": ["cl", "cd", "cmz", "cdp", "cdv"],
     }
@@ -442,7 +450,6 @@ def _solver_force_coefficients(
         aliases = {
             "cl": (f"{name}_cl", "cl"),
             "cd": (f"{name}_cd", "cd"),
-            "cm": (f"{name}_cmz", f"{name}_cm", "cmz", "cm"),
             "cdp": (f"{name}_cdp", "cdp"),
             "cdv": (f"{name}_cdv", "cdv"),
         }
@@ -451,6 +458,17 @@ def _solver_force_coefficients(
                 value = _finite_float(raw.get(key))
                 if value is not None:
                     candidate[target] = value
+                    break
+        for key in (f"{name}_cmz", "cmz"):
+            value = _finite_float(raw.get(key))
+            if value is not None:
+                candidate["cm"] = float(adflow_cmz_to_standard_cm(value))
+                break
+        else:
+            for key in (f"{name}_cm", "cm"):
+                value = _finite_float(raw.get(key))
+                if value is not None:
+                    candidate["cm"] = value
                     break
     return normalize_force_coefficients(_comm_bcast(comm, candidate, root=0))
 
@@ -870,6 +888,25 @@ class ADflowBackend:
             force_source = "post_field"
         if candidate_force:
             metrics["force_coefficients"] = candidate_force
+            mapping = request.case.solver_context.flow_conditions_dict
+            metrics["force_contract"] = {
+                "moment_reference": [
+                    float(
+                        mapping.get(
+                            "x_ref",
+                            mapping.get("xRef", STANDARD_MOMENT_REFERENCE[0]),
+                        )
+                    ),
+                    float(
+                        mapping.get(
+                            "y_ref",
+                            mapping.get("yRef", STANDARD_MOMENT_REFERENCE[1]),
+                        )
+                    ),
+                ],
+                "moment_sign_convention": STANDARD_MOMENT_SIGN_CONVENTION,
+                "adflow_native_cmz_sign_convention": ADFLOW_CMZ_SIGN_CONVENTION,
+            }
         if request.case.ground_truth.force_coefficients:
             reference_force = normalize_force_coefficients(
                 request.case.ground_truth.force_coefficients

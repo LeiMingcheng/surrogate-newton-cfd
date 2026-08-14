@@ -369,7 +369,7 @@ class EvaluationForceMetricsConfig:
     gamma: float = 1.4
     chord_ref: float = 1.0
     area_ref: float = 1.0
-    moment_center: tuple[float, float] = (0.0, 0.0)
+    moment_center: tuple[float, float] = (0.25, 0.0)
     compute_viscous: bool = True
     t_inf: float = 300.0
 

@@ -17,6 +17,7 @@ OOD_DEFINITION = (
 )
 _REQUIRED_SCORE_COLUMNS = {"split", "geometry_key", "ood_k5"}
 _NEIGHBOUR_COUNT = 5
+_OOD_PERCENTILE_THRESHOLD = 0.99
 
 
 @dataclass(frozen=True)
@@ -132,16 +133,15 @@ class OodGeometryIndex:
         percentile = float(
             np.searchsorted(self.score_distribution, distance_k5, side="right")
         ) / float(self.training_count)
-        if percentile >= 0.99:
-            label = "out-of-distribution"
-        elif percentile >= 0.90:
-            label = "distribution edge"
-        else:
-            label = "in-distribution"
+        label = "OOD" if percentile >= _OOD_PERCENTILE_THRESHOLD else "ID"
         return {
             "label": label,
+            "is_ood": label == "OOD",
             "percentile": percentile,
             "distance_k5": distance_k5,
+            "distance_units": "chord-normalized combined surface RMS",
+            "threshold_percentile": _OOD_PERCENTILE_THRESHOLD,
+            "scope": "geometry-only neighbourhood warning",
             "definition": OOD_DEFINITION,
         }
 
@@ -150,6 +150,7 @@ class OodGeometryIndex:
             "geometry_count": self.geometry_count,
             "training_count": self.training_count,
             "neighbour_count": _NEIGHBOUR_COUNT,
+            "threshold_percentile": _OOD_PERCENTILE_THRESHOLD,
             "score_min": float(self.score_distribution[0]),
             "score_max": float(self.score_distribution[-1]),
             "definition": OOD_DEFINITION,

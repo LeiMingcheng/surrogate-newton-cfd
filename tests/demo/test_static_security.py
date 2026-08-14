@@ -177,8 +177,26 @@ class DemoStaticSecurityTests(unittest.TestCase):
     def test_demo_discloses_transport_and_shared_compute_limits(self) -> None:
         html = (DEMO_ROOT / "static" / "demo.html").read_text(encoding="utf-8")
         self.assertIn("Public research preview over HTTP", html)
-        self.assertIn("Compute resources are limited", html)
-        self.assertIn("requests may queue", html)
+        self.assertIn("Limited hardware and queueing", html)
+        self.assertIn("10–100 s", html)
+        self.assertIn("3–10 s", html)
+        self.assertIn("Queue waiting time", html)
+
+    def test_demo_exposes_the_agreed_aerodynamic_contract(self) -> None:
+        html = (DEMO_ROOT / "static" / "demo.html").read_text(encoding="utf-8")
+        script = (DEMO_ROOT / "static" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("Geometry-only neighbourhood warning", html)
+        self.assertIn("not explicitly included as a named training dataset", html)
+        self.assertIn("shared trailing-edge closure", html)
+        self.assertIn('id="cf-chart"', html)
+        self.assertIn("x/c = 0.25 with nose-up positive", html)
+        self.assertIn("CDν", script)
+        self.assertIn("ΔCL vs ADflow", script)
+        self.assertIn("ΔCD vs ADflow", script)
+        self.assertIn("include: [0, 1]", script)
+        self.assertIn("toFixed(1)", script)
+        self.assertNotIn("FIELD_SMOOTHING_PX", script)
+        self.assertIn("drawContinuousField", script)
 
 
 if __name__ == "__main__":

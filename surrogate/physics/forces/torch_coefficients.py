@@ -13,6 +13,10 @@ Mirrors the logic in force_coefficients.py but uses pure torch operations.
 import math
 import torch
 
+from surrogate.physics.forces.conventions import (
+    STANDARD_MOMENT_REFERENCE,
+    right_hand_cmz_to_standard_cm,
+)
 from surrogate.physics.pde.surface_forces import (
     compute_viscous_wall_force_adflow_like_torch,
     prepare_surface_force_geometry,
@@ -228,7 +232,7 @@ def compute_force_components_ogrid_torch(
     gamma: float = 1.4,
     chord_ref: float = 1.0,
     area_ref=None,
-    moment_center: tuple = (0.0, 0.0),
+    moment_center: tuple = STANDARD_MOMENT_REFERENCE,
     compute_viscous: bool = True,
     T_inf: float = 300.0,
     prepared_geometry=None,
@@ -359,16 +363,17 @@ def compute_force_components_ogrid_torch(
     CDp = (Fx_p * cos_a + Fy_p * sin_a) / area
     pressure_face_x = -Cp * nx * ds * seg_mask
     pressure_face_y = -Cp * ny * ds * seg_mask
-    Mp = torch.sum(
+    Mp_right_hand = torch.sum(
         (x_wall_c - x_ref[:, None]) * pressure_face_y
         - (y_wall_c - y_ref[:, None]) * pressure_face_x,
         dim=1,
     )
-    Cmp = Mp / (area * chord)
+    Cmp = right_hand_cmz_to_standard_cm(Mp_right_hand / (area * chord))
 
     Fx_v = torch.zeros(B, device=device, dtype=dtype)
     Fy_v = torch.zeros(B, device=device, dtype=dtype)
-    Mv = torch.zeros(B, device=device, dtype=dtype)
+    Mv_right_hand = torch.zeros(B, device=device, dtype=dtype)
+    wall_cf = torch.zeros_like(Cp)
     if compute_viscous:
         if prepared_geometry is None:
             geometry_coords = coords_for_geometry
@@ -392,7 +397,7 @@ def compute_force_components_ogrid_torch(
         Fy_v = viscous_force["Fy_v"].to(dtype=dtype)
         wall_vx = viscous_force["wall_vx"].to(dtype=dtype)
         wall_vy = viscous_force["wall_vy"].to(dtype=dtype)
-        Mv = torch.sum(
+        Mv_right_hand = torch.sum(
             (
                 (x_wall_c - x_ref[:, None]) * wall_vy
                 - (y_wall_c - y_ref[:, None]) * wall_vx
@@ -400,11 +405,31 @@ def compute_force_components_ogrid_torch(
             * seg_mask,
             dim=1,
         )
+        # ``wall_v*`` is the face-integrated viscous body force. Divide by
+        # face length and dynamic pressure, then project onto a surface
+        # tangent oriented from leading edge to trailing edge. Positive Cf
+        # therefore denotes downstream wall shear on either surface.
+        tangent_x = dx / (ds + 1.0e-12)
+        tangent_y = dy / (ds + 1.0e-12)
+        downstream_sign = torch.where(
+            tangent_x < 0.0,
+            -torch.ones_like(tangent_x),
+            torch.ones_like(tangent_x),
+        )
+        tangent_x = tangent_x * downstream_sign
+        tangent_y = tangent_y * downstream_sign
+        wall_cf = (
+            (wall_vx * tangent_x + wall_vy * tangent_y)
+            / (ds + 1.0e-12)
+            / (q_nondim[:, None] + 1.0e-12)
+        ) * seg_mask
 
     viscous_scale = q_nondim * area + 1.0e-12
     CLv = (Fy_v * cos_a - Fx_v * sin_a) / viscous_scale
     CDv = (Fx_v * cos_a + Fy_v * sin_a) / viscous_scale
-    Cmv = Mv / (q_nondim * area * chord + 1.0e-12)
+    Cmv = right_hand_cmz_to_standard_cm(
+        Mv_right_hand / (q_nondim * area * chord + 1.0e-12)
+    )
 
     result = {
         "CL": CLp + CLv,
@@ -420,8 +445,12 @@ def compute_force_components_ogrid_torch(
         "Fy_p": Fy_p,
         "Fx_v": Fx_v,
         "Fy_v": Fy_v,
-        "M_p": Mp,
-        "M_v": Mv,
+        "M_p": right_hand_cmz_to_standard_cm(Mp_right_hand),
+        "M_v": right_hand_cmz_to_standard_cm(Mv_right_hand),
+        "Cp": Cp,
+        "Cf": wall_cf,
+        "wall_x": x_wall_c,
+        "wall_y": y_wall_c,
     }
     if single_sample:
         return {name: value.squeeze(0) for name, value in result.items()}
@@ -435,7 +464,7 @@ def compute_force_coefficients_ogrid_torch(
     gamma: float = 1.4,
     chord_ref: float = 1.0,
     area_ref=None,
-    moment_center: tuple = (0.0, 0.0),
+    moment_center: tuple = STANDARD_MOMENT_REFERENCE,
     compute_viscous: bool = True,
     T_inf: float = 300.0,
     prepared_geometry=None,

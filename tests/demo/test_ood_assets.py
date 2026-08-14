@@ -46,6 +46,10 @@ class OodAssetTests(unittest.TestCase):
             self.assertGreaterEqual(result["percentile"], 0.0)
             self.assertLessEqual(result["percentile"], 1.0)
             self.assertGreaterEqual(result["distance_k5"], 0.0)
+            self.assertIn(result["label"], {"ID", "OOD"})
+            self.assertEqual(result["is_ood"], result["percentile"] >= 0.99)
+            self.assertEqual(result["threshold_percentile"], 0.99)
+            self.assertEqual(result["scope"], "geometry-only neighbourhood warning")
 
     def test_index_rejects_too_few_training_rows(self) -> None:
         with tempfile.TemporaryDirectory(prefix="ood-invalid-", dir=REPO_ROOT.parent) as temp:

@@ -38,6 +38,11 @@ from NK_resume import (
     finalonly_plan,
 )
 from surrogate.data.uniform_flow_initializer import UniformFlowInitializer
+from surrogate.physics.forces import (
+    STANDARD_MOMENT_REFERENCE,
+    STANDARD_MOMENT_SIGN_CONVENTION,
+    compute_force_components_ogrid_torch,
+)
 from surrogate.serving.client import SurrogateClient, SurrogateClientConfig
 from surrogate.serving.geometry import (
     GeometryPreparationConfig,
@@ -411,6 +416,8 @@ def _pressure_view(
     coords_vertex: np.ndarray,
     *,
     mach: float,
+    aoa: float,
+    reynolds: float,
 ) -> dict[str, Any]:
     state = np.asarray(field, dtype=np.float64)
     if state.ndim == 4 and state.shape[0] == 1:
@@ -430,32 +437,54 @@ def _pressure_view(
             f"got {vertices.shape} for {pressure.shape}."
         )
 
-    wall_x = coords[0, 0]
-    wall_y = coords[1, 0]
-    wall_cp = (pressure[0] - 1.0) / (0.5 * GAMMA * float(mach) ** 2)
+    components = compute_force_components_ogrid_torch(
+        torch.as_tensor(state, dtype=torch.float64),
+        torch.as_tensor(vertices, dtype=torch.float64),
+        torch.as_tensor([mach, aoa, reynolds], dtype=torch.float64),
+        gamma=GAMMA,
+        chord_ref=float(REFERENCE_CHORD),
+        area_ref=1.0,
+        moment_center=STANDARD_MOMENT_REFERENCE,
+        compute_viscous=True,
+    )
+    component_values = {
+        key: np.asarray(value.detach().cpu(), dtype=np.float64)
+        for key, value in components.items()
+    }
+    wall_x = component_values["wall_x"].reshape(-1)
+    wall_y = component_values["wall_y"].reshape(-1)
+    wall_cp = component_values["Cp"].reshape(-1)
+    wall_cf = component_values["Cf"].reshape(-1)
     leading_edge = int(np.argmin(wall_x))
     first = np.column_stack(
-        [wall_x[: leading_edge + 1], wall_y[: leading_edge + 1], wall_cp[: leading_edge + 1]]
+        [
+            wall_x[: leading_edge + 1],
+            wall_y[: leading_edge + 1],
+            wall_cp[: leading_edge + 1],
+            wall_cf[: leading_edge + 1],
+        ]
     )
     second = np.column_stack(
-        [wall_x[leading_edge:], wall_y[leading_edge:], wall_cp[leading_edge:]]
+        [
+            wall_x[leading_edge:],
+            wall_y[leading_edge:],
+            wall_cp[leading_edge:],
+            wall_cf[leading_edge:],
+        ]
     )
-    branches = []
-    for branch in (first, second):
-        branch = branch[np.argsort(branch[:, 0], kind="stable")]
-        branches.append(branch)
-    upper, lower = (
+    branches = [branch[np.argsort(branch[:, 0], kind="stable")] for branch in (first, second)]
+    upper_raw, lower_raw = (
         (branches[0], branches[1])
         if float(np.mean(branches[0][:, 1])) >= float(np.mean(branches[1][:, 1]))
         else (branches[1], branches[0])
     )
-    upper = upper[upper[:, 0] < CP_PLOT_X_MAX]
-    lower = lower[lower[:, 0] < CP_PLOT_X_MAX]
+    upper = upper_raw[upper_raw[:, 0] < CP_PLOT_X_MAX]
+    lower = lower_raw[lower_raw[:, 0] < CP_PLOT_X_MAX]
     if len(upper) < 2 or len(lower) < 2:
         raise ValueError("Cp surface branches contain too few points after trailing-edge trim.")
     cp_trailing_edge = 0.5 * (float(upper[-1, 2]) + float(lower[-1, 2]))
-    upper = np.vstack([upper, [1.0, 0.0, cp_trailing_edge]])
-    lower = np.vstack([lower, [1.0, 0.0, cp_trailing_edge]])
+    upper_cp = np.vstack([upper[:, [0, 2]], [1.0, cp_trailing_edge]])
+    lower_cp = np.vstack([lower[:, [0, 2]], [1.0, cp_trailing_edge]])
     channels = {}
     for index, (key, label) in enumerate(FIELD_CHANNELS):
         values = state[index]
@@ -473,13 +502,32 @@ def _pressure_view(
             "width": int(pressure.shape[1]),
             "node_height": int(vertices.shape[1]),
             "node_width": int(vertices.shape[2]),
+            "cell_count": int(pressure.shape[0] * pressure.shape[1]),
+            "mesh_shape": [int(pressure.shape[0]), int(pressure.shape[1])],
             "x": vertices[0].reshape(-1).tolist(),
             "y": vertices[1].reshape(-1).tolist(),
             "channels": channels,
         },
         "cp": {
-            "upper": {"x": upper[:, 0].tolist(), "cp": upper[:, 2].tolist()},
-            "lower": {"x": lower[:, 0].tolist(), "cp": lower[:, 2].tolist()},
+            "upper": {"x": upper_cp[:, 0].tolist(), "cp": upper_cp[:, 1].tolist()},
+            "lower": {"x": lower_cp[:, 0].tolist(), "cp": lower_cp[:, 1].tolist()},
+        },
+        "cf": {
+            "upper": {"x": upper[:, 0].tolist(), "cf": upper[:, 3].tolist()},
+            "lower": {"x": lower[:, 0].tolist(), "cf": lower[:, 3].tolist()},
+        },
+        "forces": {
+            "cl": float(component_values["CL"]),
+            "cd": float(component_values["CD"]),
+            "cm": float(component_values["Cm"]),
+            "cdp": float(component_values["CDp"]),
+            "cdv": float(component_values["CDv"]),
+        },
+        "force_contract": {
+            "moment_reference": list(STANDARD_MOMENT_REFERENCE),
+            "moment_sign_convention": STANDARD_MOMENT_SIGN_CONVENTION,
+            "viscous_drag_public_notation": "CDν",
+            "surface_cf_sign_convention": "positive downstream wall shear",
         },
     }
 
@@ -927,7 +975,10 @@ class DemoEngine:
             prepared.coords,
             prepared.coords_vertex,
             mach=float(mach),
+            aoa=float(aoa),
+            reynolds=float(reynolds),
         )
+        field_forces = view.pop("forces")
         residual_components = response.get("residual_components") or {}
         residual_ratio = residual_components.get("l2_ratio")
         summary = {
@@ -946,11 +997,7 @@ class DemoEngine:
                 "key": "surrogate",
                 "label": "Neural estimate",
                 "status": "complete",
-                "forces": {
-                    "cl": _first_scalar(response["cl"]),
-                    "cd": _first_scalar(response["cd"]),
-                    "cm": _first_scalar(response["cm"]),
-                },
+                "forces": field_forces,
                 "residual": {
                     "kind": "rans_sa_l2_ratio",
                     "final": None
@@ -1054,6 +1101,11 @@ class DemoEngine:
                 (solver_prepare.get("solver_warmup") or {}).get("solver_reused", False)
             ),
             "mpi_ranks": self.mpi_ranks,
+            "mesh_shape": [
+                int(prepared.coords.shape[-2]),
+                int(prepared.coords.shape[-1]),
+            ],
+            "cell_count": int(prepared.coords.shape[-2] * prepared.coords.shape[-1]),
         }
         _json_dump(self.mesh_root / f"{geometry_key}.demo.json", result)
         self._meshes[geometry_key] = result
@@ -1087,6 +1139,8 @@ class DemoEngine:
             "pressure": float(REFERENCE_P_INF),
             "area_ref": 1.0,
             "chord_ref": float(REFERENCE_CHORD),
+            "x_ref": float(STANDARD_MOMENT_REFERENCE[0]),
+            "y_ref": float(STANDARD_MOMENT_REFERENCE[1]),
             "reference_state_mode": "dataset_unified",
         }
 
@@ -1275,7 +1329,10 @@ class DemoEngine:
             arrays["coords"],
             arrays["coords_vertex"],
             mach=float(flow[0]),
+            aoa=float(flow[1]),
+            reynolds=float(flow[2]),
         )
+        field_forces = view.pop("forces")
         residual_budgets = [int(value) for value in residual.get("budgets", [])]
         is_recovery = result_kind == "recovery"
         return {
@@ -1291,9 +1348,9 @@ class DemoEngine:
             "approx_total_its": solver_work.get("approx_total_its"),
             "termination": solver_work.get("termination"),
             "forces": {
-                key: float(force[key])
-                for key in ("cl", "cd", "cm")
-                if key in force
+                key: float(force.get(key, field_forces[key]))
+                for key in ("cl", "cd", "cm", "cdp", "cdv")
+                if key in force or key in field_forces
             },
             "residual": {
                 "kind": residual_kind,

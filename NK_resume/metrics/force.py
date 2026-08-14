@@ -10,6 +10,7 @@ from typing import Any, Mapping, Sequence
 import numpy as np
 
 from ..exceptions import ContractError
+from .moment import STANDARD_MOMENT_REFERENCE, right_hand_cmz_to_standard_cm
 
 
 FORCE_METRICS_SCHEMA = "force_metrics_v1"
@@ -25,7 +26,7 @@ _FORCE_ALIASES = {
     "drag_coefficient": "cd",
     "cm": "cm",
     "c_m": "cm",
-    "cmz": "cm",
+    "cmz": "cmz",
     "moment": "cm",
     "moment_coefficient": "cm",
 }
@@ -149,7 +150,12 @@ def normalize_force_coefficients(values: Mapping[str, Any] | None) -> dict[str, 
 
     out: dict[str, float] = {}
     for key, value in dict(values or {}).items():
-        out[_force_key(str(key))] = _finite_float(value, name=f"force coefficient {key!r}")
+        normalized_key = _force_key(str(key))
+        normalized_value = _finite_float(value, name=f"force coefficient {key!r}")
+        if normalized_key == "cmz":
+            normalized_key = "cm"
+            normalized_value = float(right_hand_cmz_to_standard_cm(normalized_value))
+        out[normalized_key] = normalized_value
     return out
 
 
@@ -161,7 +167,7 @@ def compute_field_force_coefficients(
     gamma: float = 1.4,
     chord_ref: float = 1.0,
     area_ref: float | None = None,
-    moment_center: tuple[float, float] = (0.0, 0.0),
+    moment_center: tuple[float, float] = STANDARD_MOMENT_REFERENCE,
     viscous_force: Mapping[str, Any] | None = None,
 ) -> dict[str, float]:
     """Compute field-based 2D force coefficients without solver internals.
@@ -247,8 +253,12 @@ def compute_field_force_coefficients(
             viscous_force.get("M_v", viscous_force.get("m_v", 0.0)),
             name="viscous moment",
         )
-    cmp = pressure_moment / (s_ref * float(chord_ref))
-    cmv = viscous_moment / (q_nondim * s_ref * float(chord_ref) + 1.0e-12)
+    cmp = right_hand_cmz_to_standard_cm(
+        pressure_moment / (s_ref * float(chord_ref))
+    )
+    cmv = right_hand_cmz_to_standard_cm(
+        viscous_moment / (q_nondim * s_ref * float(chord_ref) + 1.0e-12)
+    )
     cm = cmp + cmv
     return normalize_force_coefficients(
         {
