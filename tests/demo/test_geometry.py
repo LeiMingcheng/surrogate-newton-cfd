@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import numpy as np
 
@@ -11,6 +13,7 @@ from demo.compute import (
     _geometry_payload,
     _split_coordinate_text,
 )
+from surrogate.serving.geometry import GeometryPreparationConfig, GeometryPreparer
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 EXAMPLE_PATH = REPO_ROOT / "demo" / "static" / "example-airfoil.txt"
@@ -87,6 +90,45 @@ class CoordinateGeometryTests(unittest.TestCase):
         lines[first + 4], lines[first + 14] = lines[first + 14], lines[first + 4]
         with self.assertRaisesRegex(ValueError, "monotonic"):
             _split_coordinate_text("\n".join(lines))
+
+    def test_missing_cached_cgns_is_regenerated(self) -> None:
+        geometry = np.zeros(27, dtype=np.float32)
+        coords_vertex = np.zeros((2, 3, 4), dtype=np.float64)
+        coords = np.zeros((2, 2, 3), dtype=np.float32)
+
+        def generate(_geometry, **options):
+            authority = Path(options["persist_cgns_path"])
+            authority.parent.mkdir(parents=True, exist_ok=True)
+            authority.write_bytes(b"CGNS fixture")
+            return coords_vertex, coords
+
+        with tempfile.TemporaryDirectory() as directory:
+            preparer = GeometryPreparer(
+                config=GeometryPreparationConfig(
+                    mesh_mode="pyhyp",
+                    cache_size=4,
+                    authority_cgns_dir=Path(directory) / "meshes",
+                )
+            )
+            with patch(
+                "surrogate.serving.geometry.generate_mesh_from_cst27",
+                side_effect=generate,
+            ) as mocked_generate:
+                first = preparer.prepare(
+                    {"geometry": geometry, "tag": "fixture", "persist_cgns": True}
+                )
+                authority = Path(str(first.metadata["authority_cgns_path"]))
+                self.assertTrue(authority.is_file())
+                authority.unlink()
+
+                second = preparer.prepare(
+                    {"geometry": geometry, "tag": "fixture", "persist_cgns": True}
+                )
+                self.assertTrue(
+                    Path(str(second.metadata["authority_cgns_path"])).is_file()
+                )
+
+        self.assertEqual(mocked_generate.call_count, 2)
 
 
 if __name__ == "__main__":

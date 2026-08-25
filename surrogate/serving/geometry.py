@@ -103,6 +103,18 @@ class GeometryPreparer:
     def _cache_get(self, key: str) -> Optional[PreparedGeometry]:
         value = self._cache.get(key)
         if value is not None:
+            authority_value = value.metadata.get("authority_cgns_path")
+            authority_missing = authority_value is not None and not Path(
+                str(authority_value)
+            ).is_file()
+            if authority_missing:
+                # Persistent geometry artifacts have a shorter lifecycle than
+                # this in-memory LRU in long-running services.  Never return a
+                # cached mesh whose CGNS authority was removed by TTL cleanup;
+                # evict it so ``prepare`` regenerates both arrays and CGNS.
+                self._cache.pop(key, None)
+                return None
+        if value is not None:
             self._cache.move_to_end(key, last=True)
         return value
 
